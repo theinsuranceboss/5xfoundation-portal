@@ -40,3 +40,29 @@ h1, h2, h3, h4, h5, h6 {
 html {
   scroll-behavior: smooth;
 }
+
+/* Caret & Selection Highlight Fixes */
+input, textarea, select, [contenteditable] {
+  caret-color: currentColor !important;
+}
+
+::selection {
+  background-color: rgba(57, 255, 20, 0.4) !important;
+  color: #000000 !important;
+}
+
+input::selection, textarea::selection {
+  background-color: rgba(0, 163, 255, 0.3) !important;
+  color: inherit !important;
+}
+
+/* Prevent duplicate Shopify Buy Button or custom HTML widget collections/iframes */
+#shopify-native-container > div:nth-child(n+2),
+#shopify-native-container > iframe:nth-of-type(n+2),
+#collection-component-1779388874915 > div:nth-child(n+2),
+#collection-component-1779388874915 > iframe:nth-of-type(n+2),
+#shopify-donate-container > div:nth-child(n+2),
+#shopify-donate-container > iframe:nth-of-type(n+2) {
+  display: none !important;
+}
+

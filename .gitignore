@@ -42,3 +42,23 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# local next-dev folder
+.next-dev/
+
+# local scratch and temp files
+test-*.js
+scratch-*.js
+import_back_images.js
+parse_csv_images.js
+printful-dump.json
+products_export.csv
+/merch-store-temp/
+/temp-install/
+.next-dev-local/
+.next-local/
+
+# Prisma generated client
+/src/generated/
+
+

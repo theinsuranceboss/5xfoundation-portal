@@ -4,7 +4,10 @@ import "./globals.css";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import A11yAnnouncer from "@/components/A11yAnnouncer";
-
+import GlobalStyles from "@/components/GlobalStyles";
+import { CartSidebar } from "@/components/cart-sidebar";
+import { ProductDetail } from "@/components/product-detail";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,6 +24,8 @@ export const metadata: Metadata = {
   description: "Five Time Foundation™ empowers cancer warriors to reclaim mobility, confidence, and connection after limb loss. Founded by 6-time survivor Rich Canci.",
 };
 
+import MainLayoutWrapper from "@/components/MainLayoutWrapper";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,15 +37,20 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans selection:bg-neon-green/30 selection:text-black">
+        <GlobalStyles />
         <A11yAnnouncer />
         <Navigation />
 
-        <main className="flex-grow pt-20">
+        <MainLayoutWrapper>
           {children}
-        </main>
+        </MainLayoutWrapper>
+        <ProductDetail />
+        <CartSidebar />
+        <Toaster position="bottom-right" />
         <Footer />
       </body>
     </html>
   );
 }
+
 

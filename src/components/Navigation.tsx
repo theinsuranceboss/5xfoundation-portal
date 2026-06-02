@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ShoppingBag, ShieldCheck } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getSiteContent } from "@/lib/supabase";
+import { useStore } from "@/lib/store";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -25,6 +27,37 @@ const navItems = [
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const [logoUrl, setLogoUrl] = useState("/logo.png");
+  
+  const setIsCartOpen = useStore((state) => state.setIsCartOpen);
+  const cart = useStore((state) => state.cart);
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const toggleCart = () => setIsCartOpen(true);
+
+  useEffect(() => {
+    async function fetchLogo() {
+      try {
+        const dbContent = await getSiteContent('siteContent');
+        if (dbContent) {
+          const parsed = JSON.parse(dbContent);
+          if (parsed.logo) {
+            setLogoUrl(parsed.logo);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load navigation logo from Supabase:", err);
+        const cached = localStorage.getItem('siteContent');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.logo) setLogoUrl(parsed.logo);
+        }
+      }
+    }
+    fetchLogo();
+  }, []);
+
+  if (pathname?.startsWith("/admin")) return null;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-100 px-6 py-4 md:px-12">
@@ -33,7 +66,7 @@ export default function Navigation() {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden transition-transform group-hover:scale-110 duration-300">
             <img 
-              src={`/logo.png?v=${Date.now()}`} 
+              src={logoUrl} 
               alt="5X Cancer Foundation Logo" 
               className="w-full h-full object-contain"
             />
@@ -71,9 +104,19 @@ export default function Navigation() {
             ADMIN PORTAL
           </Link>
           
-          <Link href="/cart" className="text-black hover:text-brand-blue transition-colors">
+          <button 
+            onClick={toggleCart} 
+            className="nav-cart-btn text-black hover:text-brand-blue transition-colors relative focus:outline-none p-1"
+            aria-label="Ver carrito"
+          >
             <ShoppingBag size={20} strokeWidth={2.5} />
-          </Link>
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-brand-blue text-white text-[8px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border border-white shadow-sm">
+                {cartCount}
+              </span>
+            )}
+          </button>
+
 
           <button
             className="lg:hidden p-2 text-black"

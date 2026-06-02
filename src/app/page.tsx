@@ -5,6 +5,65 @@ import Link from "next/link";
 import { motion, AnimatePresence, useInView, useMotionValue, useTransform, animate } from "framer-motion";
 import { Heart, Users, Calendar, Quote, ShoppingBag } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import { getSiteContent } from "@/lib/supabase";
+import { DonationCard } from "@/components/DonationCard";
+
+function NativeDonateEmbed({ html }: { html: string }) {
+  const containerId = "shopify-donate-container-home";
+
+  useEffect(() => {
+    const targetDiv = document.getElementById(containerId);
+    if (!targetDiv) return;
+
+    targetDiv.innerHTML = '';
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const bodyChildren = Array.from(doc.body.childNodes);
+    bodyChildren.forEach(child => {
+      if (child.nodeName !== 'SCRIPT') {
+        targetDiv.appendChild(child.cloneNode(true));
+      }
+    });
+
+    const headChildren = Array.from(doc.head.childNodes);
+    headChildren.forEach(child => {
+      if (child.nodeName !== 'SCRIPT') {
+        targetDiv.appendChild(child.cloneNode(true));
+      }
+    });
+
+    const scripts = Array.from(doc.querySelectorAll('script'));
+    const injectedScripts: HTMLScriptElement[] = [];
+
+    scripts.forEach(originalScript => {
+      const script = document.createElement('script');
+      script.type = originalScript.type || 'text/javascript';
+      script.setAttribute('data-donate-injected', 'true');
+      
+      if (originalScript.src) {
+        script.src = originalScript.src;
+        script.async = true;
+      } else {
+        script.textContent = originalScript.textContent;
+      }
+
+      document.body.appendChild(script);
+      injectedScripts.push(script);
+    });
+
+    return () => {
+      injectedScripts.forEach(script => {
+        try { script.remove(); } catch (e) {}
+      });
+      const target = document.getElementById(containerId);
+      if (target) target.innerHTML = '';
+    };
+  }, [html]);
+
+  return <div id={containerId} className="w-full min-h-[400px]" />;
+}
 
 function StatCounter({ value, suffix = "" }: { value: number, suffix?: string }) {
   const ref = useRef(null);
@@ -45,6 +104,216 @@ function PaymentMethods() {
   );
 }
 
+function StorySlideshow({ source, name, v }: { source: string; name: string; v: number }) {
+  const [resolvedImages, setResolvedImages] = useState<string[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function resolveImages() {
+      const src = source || "";
+      if (!src.trim()) {
+        setResolvedImages(["/placeholder.png"]);
+        return;
+      }
+
+      // Check if it's a Google Drive folder link
+      const gdriveFolderRegex = /(?:folders\/|id=)(1[a-zA-Z0-9_-]{32})/;
+      const folderMatch = src.match(gdriveFolderRegex);
+
+      if (folderMatch) {
+        const folderId = folderMatch[1];
+        try {
+          const res = await fetch(`/api/gdrive?folderId=${folderId}`);
+          const data = await res.json();
+
+          if (ignore) return;
+
+          if (data.success && data.images && data.images.length > 0) {
+            setResolvedImages(data.images);
+            return;
+          }
+        } catch (err) {
+          console.error("[StorySlideshow] Fetch failed:", err);
+        }
+      }
+
+      // If it's a list of links (one per line or comma-separated)
+      const links = src
+        .split(/[\n,]/)
+        .map(l => l.trim())
+        .filter(l => l.length > 0)
+        .map(l => {
+          const fileMatch = l.match(/(?:file\/d\/|id=)(1[a-zA-Z0-9_-]{32})/);
+          if (fileMatch) {
+            return `/api/gdrive/image?id=${fileMatch[1]}&v=3`;
+          }
+          return l.includes('?') || l.startsWith('/') || l.startsWith('data:') ? l : `${l}?v=${v}`;
+        });
+
+      if (links.length > 0) {
+        if (ignore) return;
+        setResolvedImages(links);
+        return;
+      }
+
+      if (ignore) return;
+      setResolvedImages(["/placeholder.png"]);
+    }
+
+    resolveImages();
+
+    return () => {
+      ignore = true;
+    };
+  }, [source, v]);
+
+  useEffect(() => {
+    if (resolvedImages.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % resolvedImages.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [resolvedImages.length]);
+
+  if (resolvedImages.length === 0) {
+    return <div className="w-full h-full bg-white/5 animate-pulse" />;
+  }
+
+  return (
+    <div className="w-full h-full relative">
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={currentIndex}
+          src={resolvedImages[currentIndex]}
+          alt={name}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1.2, ease: "easeInOut" }}
+          className="w-full h-full object-cover transition-all duration-700 group-hover:scale-105"
+        />
+      </AnimatePresence>
+    </div>
+  );
+}
+
+interface AdBannerProps {
+  type: string;
+  desktop: string;
+  tablet: string;
+  mobile: string;
+  link: string;
+  html: string;
+  slotName: string;
+  fit?: string;
+  position?: string;
+}
+
+function AdBanner({ type, desktop, tablet, mobile, link, html, slotName, fit, position }: AdBannerProps) {
+  const hasMedia = desktop?.trim() || tablet?.trim() || mobile?.trim();
+  const hasHtml = html?.trim();
+
+  if (type === "html" && !hasHtml) return null;
+  if (type === "media" && !hasMedia) return null;
+
+  if (type === "html") {
+    return (
+      <div className="w-full max-w-7xl mx-auto px-6 py-6 overflow-hidden flex justify-center items-center">
+        <div 
+          className="w-full overflow-hidden flex justify-center items-center" 
+          dangerouslySetInnerHTML={{ __html: html }} 
+        />
+      </div>
+    );
+  }
+
+  const desktopSrc = desktop?.trim() || "";
+  const tabletSrc = tablet?.trim() || desktopSrc;
+  const mobileSrc = mobile?.trim() || tabletSrc;
+
+  const isVideo = (src: string) => src.toLowerCase().endsWith(".mp4");
+
+  const MediaElement = ({ src, className }: { src: string; className: string }) => {
+    if (!src) return null;
+    
+    const styleObj = {
+      objectFit: (fit === 'centered' ? 'contain' : fit === 'stretch' ? 'fill' : 'cover') as any,
+      objectPosition: position || 'center',
+    };
+
+    if (isVideo(src)) {
+      return (
+        <video
+          src={src}
+          className={`${className} w-full h-full pointer-events-none`}
+          style={styleObj}
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+      );
+    }
+
+    return (
+      <img
+        src={src}
+        alt={`Promotional Advertisement Banner`}
+        className={`${className} w-full h-full transition-transform duration-700 group-hover:scale-[1.02] pointer-events-none`}
+        style={styleObj}
+      />
+    );
+  };
+
+  const bannerContent = (
+    <div className="relative w-full overflow-hidden rounded-2xl shadow-lg border border-gray-100/50 bg-gray-50 flex items-center justify-center group cursor-pointer">
+      {/* Vista Desktop */}
+      <div className="hidden lg:block w-full aspect-[1200/250] pointer-events-none">
+        <MediaElement src={desktopSrc} className="rounded-2xl" />
+      </div>
+      
+      {/* Vista Tablet */}
+      <div className="hidden md:block lg:hidden w-full aspect-[768/200] pointer-events-none">
+        <MediaElement src={tabletSrc} className="rounded-2xl" />
+      </div>
+
+      {/* Vista Móvil */}
+      <div className="block md:hidden w-full aspect-[320/150] pointer-events-none">
+        <MediaElement src={mobileSrc} className="rounded-2xl" />
+      </div>
+    </div>
+  );
+  
+  const formattedLink = link?.trim() ? (
+    /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(link.trim()) ? link.trim() : `https://${link.trim()}`
+  ) : "";
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 15 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+      className="w-full max-w-7xl mx-auto px-6 py-8"
+    >
+      {formattedLink ? (
+        <a 
+          href={formattedLink} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="block w-full h-full cursor-pointer hover:shadow-xl transition-all duration-300 rounded-2xl"
+        >
+          {bannerContent}
+        </a>
+      ) : (
+        bannerContent
+      )}
+    </motion.div>
+  );
+}
+
 const fadeInUp: any = {
   initial: { opacity: 0, y: 30 },
   whileInView: { opacity: 1, y: 0 },
@@ -66,25 +335,241 @@ export default function Home() {
     fundraisingTitle: "How We Raise Funds",
     fundraisingDesc: "We raise funds through nightlife events, community gatherings, and merchandise sales, creating meaningful experiences while providing vital support to cancer patients and survivors who have experienced limb loss.",
     donationTitle: "FUEL THE FIGHT",
-    donationDesc: "Your contribution directly funds prosthetics, covers care-related costs, and empowers cancer survivors to reclaim their lives."
+    donationDesc: "Your contribution directly funds prosthetics, covers care-related costs, and empowers cancer survivors to reclaim their lives.",
+    donationHtml: "",
+    donateHtml: "",
+    donationAmounts: "$25, $50, $100, $250, $500, $ Other",
+    logo: "/logo.png",
+    hero_1: "/hero_1.png",
+    hero_2: "/hero_2.png",
+    hero_3: "/hero_3.png",
+    hero_gdrive_link: "https://drive.google.com/drive/folders/1c46Rf9ajwya3DsUwNbVoLtsp09v42trD?usp=sharing",
+    rich: "/rich.png",
+    fundraisingBg: "",
+    themeFontFamily: "Inter",
+    themeHeadingCase: "uppercase",
+    themeFontSize: "16",
+    themeHeadingScale: "1.0",
+    themeTextColor: "#4B5563",
+    themeHeadingColor: "#000000",
+    themeBrandColor: "#00A3FF",
+    footerDesc: "Empowering cancer warriors to reclaim mobility, confidence, and connection after limb loss.",
+    footerNavTitle: "Navigation",
+    footerLinks: "HOME | /\nFOUNDER | /#founder\nSHOP | /merch\nEVENTS | /events\nDONATE | /donate",
+    footerFb: "https://www.facebook.com/FiveTimeFoundation/",
+    footerIg: "https://www.instagram.com/5xfoundation",
+    footerX: "",
+    footerYt: "",
+    footerTiktok: "",
+    footerLinkedin: "",
+    footerBgColor: "#000000",
+    footerTextColor: "#9CA3AF",
+    footerLinkColor: "#FFFFFF",
+    footerSize: "1.0",
+    footerSocialShape: "rounded-xl",
+    heroTitleColor: "#FFFFFF",
+    heroDescColor: "#F3F4F6",
+    heroTitleSize: "120",
+    heroDescSize: "20",
+    heroTitleAlign: "left",
+    heroDescAlign: "left",
+    heroTitleBold: true,
+    heroDescBold: false,
+    missionTitleColor: "#000000",
+    missionDescColor: "#000000",
+    missionTitleSize: "40",
+    missionDescSize: "24",
+    missionTitleAlign: "center",
+    missionDescAlign: "center",
+    missionTitleBold: true,
+    missionDescBold: false,
+    philosophyTitleColor: "#FFFFFF",
+    philosophyTitle: 'The "Five Time" Philosophy',
+    philosophyDesc: 'Named after the sheer number of times Rich had to overcome the impossible, "Five Time" represents the moment when survival becomes second nature and Thriving becomes the only objective. We believe every amputee deserves the chance to thrive, not just survive.',
+    philosophyBgColor: "#000000",
+    philosophyBg: "",
+    philosophyOverlay: "0.6",
+    philosophyBgSize: "fill",
+    philosophyBgPosition: "center",
+    philosophyDescColor: "#E5E7EB",
+    philosophyTitleSize: "48",
+    philosophyDescSize: "20",
+    philosophyTitleAlign: "center",
+    philosophyDescAlign: "center",
+    philosophyTitleBold: true,
+    philosophyDescBold: false,
+    founderTitleColor: "#000000",
+    founderDescColor: "#000000",
+    founderTitleSize: "60",
+    founderDescSize: "18",
+    founderTitleAlign: "left",
+    founderDescAlign: "left",
+    founderTitleBold: true,
+    founderDescBold: true,
+    storiesTitleColor: "#FFFFFF",
+    storiesTitleSize: "64",
+    storiesTitleAlign: "center",
+    storiesTitleBold: true,
+    fundraisingTitleColor: "#FFFFFF",
+    fundraisingDescColor: "#9CA3AF",
+    fundraisingTitleSize: "72",
+    fundraisingDescSize: "20",
+    fundraisingTitleAlign: "center",
+    fundraisingDescAlign: "center",
+    fundraisingTitleBold: true,
+    fundraisingDescBold: false,
+    donationTitleColor: "#000000",
+    donationDescColor: "#000000",
+    donationTitleSize: "64",
+    donationDescSize: "18",
+    donationTitleAlign: "center",
+    donationDescAlign: "center",
+    donationTitleBold: true,
+    donationDescBold: false,
+    adTopType: "media",
+    adTopDesktop: "",
+    adTopTablet: "",
+    adTopMobile: "",
+    adTopLink: "",
+    adTopHtml: "",
+    adTopSize: "fill",
+    adTopPosition: "center",
+    adMiddleType: "media",
+    adMiddleDesktop: "",
+    adMiddleTablet: "",
+    adMiddleMobile: "",
+    adMiddleLink: "",
+    adMiddleHtml: "",
+    adMiddleSize: "fill",
+    adMiddlePosition: "center",
+    adBottomType: "media",
+    adBottomDesktop: "",
+    adBottomTablet: "",
+    adBottomMobile: "",
+    adBottomLink: "",
+    adBottomHtml: "",
+    adBottomSize: "fill",
+    adBottomPosition: "center",
   });
 
+  const [stories, setStories] = useState([
+    { id: 'elena', name: 'Elena Rodriguez', tag: 'Outdoor Mentor', journey: 'Elena was diagnosed with osteosarcoma in her early 30s, which eventually led to an above-the-knee amputation. While she beat the cancer, the loss of her leg felt like the loss of her identity. High-performance "running blades" were financially out of reach, and she felt isolated from her old hiking groups.', help: 'The foundation provided Elena with a grant to cover the out-of-pocket costs for a specialized prosthetic limb designed for athletic activity. Beyond the hardware, Elena joined a 5X-sponsored community meet-up where she met other amputee athletes. Today, she isn\'t just walking; she’s mentoring other survivors on how to navigate local trails.', img: '/images/stories/elena.png' },
+    { id: 'marcus', name: 'Marcus Thorne', tag: 'Creative Force', journey: 'Marcus faced a rare soft-tissue sarcoma that resulted in the loss of his dominant arm. As a freelancer, the mounting care-related costs—travel for treatments, specialized physical therapy, and home modifications—began to overwhelm his family’s savings.', help: 'The 5X Foundation stepped in to ease the burden of care-related costs, allowing Marcus to focus on his rehabilitation without the looming threat of debt. Through the foundation’s community events, Marcus found a "supportive community grounded in purpose," eventually designing a limited-edition merchandise line for the foundation, which helped him reclaim his confidence as a creator.', img: '/images/stories/marcus.png' },
+    { id: 'chloe', name: 'Chloe Chen', tag: 'Academic Excellence', journey: 'Chloe was diagnosed with cancer during her sophomore year. The surgery to save her life resulted in limb loss, and she struggled with the "why me" of it all. She felt out of place on a college campus and worried that she would never have the stamina or the self-assurance to finish her degree.', help: 'Chloe attended a Five Time Foundation™ nightlife fundraiser, where she saw people celebrating life and strength despite their scars. The foundation’s "strength and perseverance" philosophy resonated with her. 5X helped facilitate a connection with a mentor—another survivor who had navigated the professional world with a prosthetic—giving Chloe the social and emotional "connection" she needed to return to school and graduate top of her class.', img: '/images/stories/chloe.png' }
+  ]);
+
   useEffect(() => {
-    const savedContent = localStorage.getItem('siteContent');
-    if (savedContent) setContent(JSON.parse(savedContent));
-    
-    // Small delay to ensure server wrote files, then bump version to bust cache
-    setV(Date.now());
+    async function loadData() {
+      // 1. Immediate cache load for responsive loading of user edits
+      const savedContent = localStorage.getItem('siteContent');
+      if (savedContent) setContent(prev => ({ ...prev, ...JSON.parse(savedContent) }));
+      const savedStories = localStorage.getItem('siteStories');
+      if (savedStories) setStories(JSON.parse(savedStories));
+
+      // 2. Fetch fresh data from Supabase
+      try {
+        const dbContent = await getSiteContent('siteContent');
+        if (dbContent) {
+          setContent(prev => ({ ...prev, ...JSON.parse(dbContent) }));
+          localStorage.setItem('siteContent', dbContent);
+        }
+
+        const dbStories = await getSiteContent('siteStories');
+        if (dbStories) {
+          setStories(JSON.parse(dbStories));
+          localStorage.setItem('siteStories', dbStories);
+        }
+      } catch (err) {
+        console.error("Failed to load content from Supabase:", err);
+      }
+      setV(Date.now());
+    }
+    loadData();
   }, []);
 
+  const [heroImages, setHeroImages] = useState<string[]>([]);
   const [currentHero, setCurrentHero] = useState(0);
-  const heroImages = [
-    `/hero_1.png?v=${v}`,
-    `/hero_2.png?v=${v}`,
-    `/hero_3.png?v=${v}`,
-  ];
 
   useEffect(() => {
+    let ignore = false;
+
+    async function resolveHeroImages() {
+      const source = content.hero_gdrive_link || "";
+      console.log("[resolveHeroImages] Resolving slideshow from source:", source);
+      
+      // Check if it's a Google Drive folder link
+      const gdriveFolderRegex = /(?:folders\/|id=)(1[a-zA-Z0-9_-]{32})/;
+      const folderMatch = source.match(gdriveFolderRegex);
+      
+      if (folderMatch) {
+        const folderId = folderMatch[1];
+        console.log("[resolveHeroImages] Detected Google Drive Folder ID:", folderId);
+        try {
+          const res = await fetch(`/api/gdrive?folderId=${folderId}`);
+          const data = await res.json();
+          
+          if (ignore) {
+            console.log("[resolveHeroImages] Stale fetch completed, ignoring to prevent race condition.");
+            return;
+          }
+          
+          if (data.success && data.images && data.images.length > 0) {
+            console.log("[resolveHeroImages] Successfully resolved folder images:", data.images);
+            setHeroImages(data.images);
+            return;
+          } else {
+            console.warn("[resolveHeroImages] Google Drive scraper warning/error:", data.error);
+          }
+        } catch (err) {
+          if (ignore) return;
+          console.error("[resolveHeroImages] Fetch failed:", err);
+        }
+      }
+
+      // If it's a list of links (one per line or comma-separated)
+      if (source.trim().length > 0 && !folderMatch) {
+        const links = source
+          .split(/[\n,]/)
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .map(l => {
+            // Convert direct Google Drive file view links to direct image render links
+            const fileMatch = l.match(/(?:file\/d\/|id=)(1[a-zA-Z0-9_-]{32})/);
+            if (fileMatch) {
+              return `/api/gdrive/image?id=${fileMatch[1]}&v=3`;
+            }
+            return l;
+          });
+        
+        if (links.length > 0) {
+          if (ignore) return;
+          console.log("[resolveHeroImages] Resolved custom links list:", links);
+          setHeroImages(links);
+          return;
+        }
+      }
+
+      if (ignore) return;
+      // Backward compatibility / default fallback
+      const fallbacks = [
+        content.hero_1 || `/hero_1.png?v=${v}`,
+        content.hero_2 || `/hero_2.png?v=${v}`,
+        content.hero_3 || `/hero_3.png?v=${v}`,
+      ].filter(Boolean) as string[];
+      
+      console.log("[resolveHeroImages] Using legacy/fallback slide images:", fallbacks);
+      setHeroImages(fallbacks);
+    }
+
+    resolveHeroImages();
+
+    return () => {
+      ignore = true;
+    };
+  }, [content.hero_gdrive_link, content.hero_1, content.hero_2, content.hero_3, v]);
+
+  useEffect(() => {
+    if (heroImages.length === 0) return;
     const timer = setInterval(() => {
       setCurrentHero((prev) => (prev + 1) % heroImages.length);
     }, 6000); // 6 second slides
@@ -93,6 +578,84 @@ export default function Home() {
 
   return (
     <div className="flex flex-col bg-white">
+      {/* Dynamic Section Styles — !important override for all Tailwind color/font classes with fully responsive font size scaling */}
+      {(() => {
+        const s = (sizeStr: string | number, mobileFactor: number, minMobile: number, tabletFactor: number, minTablet: number) => {
+          const size = parseInt(String(sizeStr)) || 16;
+          return {
+            desktop: size,
+            tablet: Math.max(minTablet, Math.round(size * tabletFactor)),
+            mobile: Math.max(minMobile, Math.round(size * mobileFactor))
+          };
+        };
+
+        const heroTitleSizes = s(content.heroTitleSize || '120', 0.45, 36, 0.7, 56);
+        const heroDescSizes = s(content.heroDescSize || '20', 0.8, 16, 0.9, 18);
+        const missionTitleSizes = s(content.missionTitleSize || '40', 0.65, 28, 0.8, 32);
+        const missionDescSizes = s(content.missionDescSize || '24', 0.75, 18, 0.9, 20);
+        const philosophyTitleSizes = s(content.philosophyTitleSize || '48', 0.65, 28, 0.8, 36);
+        const philosophyDescSizes = s(content.philosophyDescSize || '20', 0.8, 16, 0.9, 18);
+        const founderTitleSizes = s(content.founderTitleSize || '60', 0.6, 32, 0.8, 44);
+        const founderDescSizes = s(content.founderDescSize || '18', 0.85, 15, 0.95, 16);
+        const storiesTitleSizes = s(content.storiesTitleSize || '64', 0.6, 32, 0.8, 48);
+        const fundraisingTitleSizes = s(content.fundraisingTitleSize || '72', 0.5, 36, 0.75, 52);
+        const fundraisingDescSizes = s(content.fundraisingDescSize || '20', 0.8, 16, 0.9, 18);
+        const donationTitleSizes = s(content.donationTitleSize || '64', 0.6, 32, 0.8, 48);
+        const donationDescSizes = s(content.donationDescSize || '18', 0.85, 15, 0.95, 16);
+
+        return (
+          <style dangerouslySetInnerHTML={{ __html: `
+            /* Desktop Styles */
+            .s-hero-title  { color: ${content.heroTitleColor || '#FFFFFF'} !important; font-size: ${heroTitleSizes.desktop}px !important; text-align: ${content.heroTitleAlign || 'left'} !important; font-weight: ${content.heroTitleBold !== false ? '900' : '400'} !important; }
+            .s-hero-desc   { color: ${content.heroDescColor || '#F3F4F6'} !important; font-size: ${heroDescSizes.desktop}px !important; text-align: ${content.heroDescAlign || 'left'} !important; font-weight: ${content.heroDescBold ? '700' : '500'} !important; }
+            .s-mission-title { color: ${content.missionTitleColor || '#000000'} !important; font-size: ${missionTitleSizes.desktop}px !important; text-align: ${content.missionTitleAlign || 'center'} !important; font-weight: ${content.missionTitleBold !== false ? '900' : '400'} !important; }
+            .s-mission-desc  { color: ${content.missionDescColor || '#000000'} !important; font-size: ${missionDescSizes.desktop}px !important; text-align: ${content.missionDescAlign || 'center'} !important; font-weight: ${content.missionDescBold ? '700' : '500'} !important; }
+            .s-philosophy-title { color: ${content.philosophyTitleColor || '#FFFFFF'} !important; font-size: ${philosophyTitleSizes.desktop}px !important; text-align: ${content.philosophyTitleAlign || 'center'} !important; font-weight: ${content.philosophyTitleBold !== false ? '900' : '400'} !important; }
+            .s-philosophy-desc  { color: ${content.philosophyDescColor || '#E5E7EB'} !important; font-size: ${philosophyDescSizes.desktop}px !important; text-align: ${content.philosophyDescAlign || 'center'} !important; font-weight: ${content.philosophyDescBold ? '700' : '500'} !important; }
+            .s-founder-title { color: ${content.founderTitleColor || '#000000'} !important; font-size: ${founderTitleSizes.desktop}px !important; text-align: ${content.founderTitleAlign || 'left'} !important; font-weight: ${content.founderTitleBold !== false ? '900' : '400'} !important; }
+            .s-founder-desc  { color: ${content.founderDescColor || '#4B5563'} !important; font-size: ${founderDescSizes.desktop}px !important; text-align: ${content.founderDescAlign || 'left'} !important; font-weight: ${content.founderDescBold ? '700' : '500'} !important; }
+            .s-stories-title { color: ${content.storiesTitleColor || '#FFFFFF'} !important; font-size: ${storiesTitleSizes.desktop}px !important; text-align: ${content.storiesTitleAlign || 'center'} !important; font-weight: ${content.storiesTitleBold !== false ? '900' : '400'} !important; }
+            .s-fundraising-title { color: ${content.fundraisingTitleColor || '#FFFFFF'} !important; font-size: ${fundraisingTitleSizes.desktop}px !important; text-align: ${content.fundraisingTitleAlign || 'center'} !important; font-weight: ${content.fundraisingTitleBold !== false ? '900' : '400'} !important; }
+            .s-fundraising-desc  { color: ${content.fundraisingDescColor || '#9CA3AF'} !important; font-size: ${fundraisingDescSizes.desktop}px !important; text-align: ${content.fundraisingDescAlign || 'center'} !important; font-weight: ${content.fundraisingDescBold ? '700' : '500'} !important; }
+            .s-donation-title { color: ${content.donationTitleColor || '#000000'} !important; font-size: ${donationTitleSizes.desktop}px !important; text-align: ${content.donationTitleAlign || 'center'} !important; font-weight: ${content.donationTitleBold !== false ? '900' : '400'} !important; }
+            .s-donation-desc  { color: ${content.donationDescColor || '#000000'} !important; font-size: ${donationDescSizes.desktop}px !important; text-align: ${content.donationDescAlign || 'center'} !important; font-weight: ${content.donationDescBold ? '700' : '500'} !important; }
+
+            /* Tablet Override */
+            @media (max-width: 1024px) {
+              .s-hero-title { font-size: ${heroTitleSizes.tablet}px !important; }
+              .s-hero-desc { font-size: ${heroDescSizes.tablet}px !important; }
+              .s-mission-title { font-size: ${missionTitleSizes.tablet}px !important; }
+              .s-mission-desc { font-size: ${missionDescSizes.tablet}px !important; }
+              .s-philosophy-title { font-size: ${philosophyTitleSizes.tablet}px !important; }
+              .s-philosophy-desc { font-size: ${philosophyDescSizes.tablet}px !important; }
+              .s-founder-title { font-size: ${founderTitleSizes.tablet}px !important; }
+              .s-founder-desc { font-size: ${founderDescSizes.tablet}px !important; }
+              .s-stories-title { font-size: ${storiesTitleSizes.tablet}px !important; }
+              .s-fundraising-title { font-size: ${fundraisingTitleSizes.tablet}px !important; }
+              .s-fundraising-desc { font-size: ${fundraisingDescSizes.tablet}px !important; }
+              .s-donation-title { font-size: ${donationTitleSizes.tablet}px !important; }
+              .s-donation-desc { font-size: ${donationDescSizes.tablet}px !important; }
+            }
+
+            /* Mobile Override */
+            @media (max-width: 767px) {
+              .s-hero-title { font-size: ${heroTitleSizes.mobile}px !important; text-align: center !important; }
+              .s-hero-desc { font-size: ${heroDescSizes.mobile}px !important; text-align: center !important; }
+              .s-mission-title { font-size: ${missionTitleSizes.mobile}px !important; }
+              .s-mission-desc { font-size: ${missionDescSizes.mobile}px !important; }
+              .s-philosophy-title { font-size: ${philosophyTitleSizes.mobile}px !important; }
+              .s-philosophy-desc { font-size: ${philosophyDescSizes.mobile}px !important; }
+              .s-founder-title { font-size: ${founderTitleSizes.mobile}px !important; text-align: center !important; }
+              .s-founder-desc { font-size: ${founderDescSizes.mobile}px !important; text-align: center !important; }
+              .s-stories-title { font-size: ${storiesTitleSizes.mobile}px !important; }
+              .s-fundraising-title { font-size: ${fundraisingTitleSizes.mobile}px !important; }
+              .s-fundraising-desc { font-size: ${fundraisingDescSizes.mobile}px !important; }
+              .s-donation-title { font-size: ${donationTitleSizes.mobile}px !important; }
+              .s-donation-desc { font-size: ${donationDescSizes.mobile}px !important; }
+            }
+          ` }} />
+        );
+      })()}
       {/* Hero Section - Carousel Edition */}
       <section className="relative h-screen flex items-center text-left px-6 md:px-24 overflow-hidden">
         {/* Animated Background Carousel */}
@@ -123,12 +686,10 @@ export default function Home() {
             <h2 className="text-[10px] md:text-sm uppercase tracking-[0.6em] text-white font-black mb-8 opacity-80">
               Empowering Cancer Warriors
             </h2>
-            <h1 className="text-7xl md:text-[8.5rem] font-black text-white tracking-[-0.04em] leading-[0.75] mb-12 uppercase italic whitespace-pre-line">
+            <h1 className="s-hero-title tracking-[-0.04em] leading-[0.85] mb-8 md:mb-12 uppercase italic whitespace-pre-line">
               {content.heroTitle}
             </h1>
-
-
-            <p className="text-lg md:text-xl text-gray-400 mb-16 max-w-2xl leading-relaxed font-medium">
+            <p className="s-hero-desc mb-10 md:mb-16 max-w-2xl leading-relaxed">
               {content.heroDesc}
             </p>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-6">
@@ -151,30 +712,76 @@ export default function Home() {
         </div>
       </section>
 
+      <AdBanner
+        type={content.adTopType || "media"}
+        desktop={content.adTopDesktop}
+        tablet={content.adTopTablet}
+        mobile={content.adTopMobile}
+        link={content.adTopLink}
+        html={content.adTopHtml}
+        slotName="top"
+        fit={content.adTopSize}
+        position={content.adTopPosition}
+      />
 
       {/* Our Mission Section */}
       <section id="mission" className="py-32 bg-white px-6 text-center border-b border-gray-100">
         <div className="max-w-4xl mx-auto">
-          <motion.h2 {...fadeInUp} className="text-4xl font-black tracking-tight mb-12">
+          <motion.h2 {...fadeInUp} className="s-mission-title tracking-tight mb-8 md:mb-12">
             {content.missionTitle}
           </motion.h2>
-          <motion.p {...fadeInUp} transition={{ delay: 0.1 }} className="text-xl md:text-2xl text-gray-500 leading-relaxed font-medium px-4">
+          <motion.p {...fadeInUp} transition={{ delay: 0.1 }} className="s-mission-desc leading-relaxed px-4">
             {content.missionDesc}
           </motion.p>
         </div>
       </section>
 
       {/* Philosophy Section */}
-      <section id="philosophy" className="py-32 bg-black text-white px-6 md:px-24 text-center">
-        <div className="max-w-4xl mx-auto">
-          <motion.h2 {...fadeInUp} className="text-4xl md:text-5xl font-black tracking-tight mb-10">
-            The "Five Time" Philosophy
+      <section 
+        id="philosophy" 
+        className="py-32 text-white px-6 md:px-24 text-center relative overflow-hidden select-none border-b border-white/5 animate-none"
+        style={{
+          backgroundColor: content.philosophyBgColor || '#000000',
+          backgroundImage: content.philosophyBg && content.philosophyBg !== "none" ? `url(${content.philosophyBg})` : 'none',
+          backgroundSize: content.philosophyBgSize === 'centered' ? 'contain' : content.philosophyBgSize === 'stretch' ? '100% 100%' : 'cover',
+          backgroundPosition: content.philosophyBgPosition || 'center',
+        }}
+      >
+        {content.philosophyBg && content.philosophyBg !== "none" && (
+          <div 
+            className="absolute inset-0 bg-black pointer-events-none animate-none" 
+            style={{ opacity: parseFloat(content.philosophyOverlay || '0.6') }} 
+          />
+        )}
+        <div className="max-w-4xl mx-auto relative z-10">
+          <motion.h2 
+            {...fadeInUp} 
+            className="s-philosophy-title tracking-tight mb-8 md:mb-10"
+            style={{
+              fontSize: content.philosophyTitleSize ? `${content.philosophyTitleSize}px` : undefined,
+              color: content.philosophyTitleColor || '#FFFFFF',
+              textAlign: (content.philosophyTitleAlign || 'center') as any,
+              fontWeight: content.philosophyTitleBold ? '900' : 'normal'
+            }}
+          >
+            {content.philosophyTitle || 'The "Five Time" Philosophy'}
           </motion.h2>
-          <motion.p {...fadeInUp} transition={{ delay: 0.1 }} className="text-lg md:text-xl text-gray-400 leading-loose">
-            Named after the sheer number of times Rich had to overcome the impossible, "Five Time" represents the moment when survival becomes second nature and Thriving becomes the only objective. We believe every amputee deserves the chance to thrive, not just survive.
+          <motion.p 
+            {...fadeInUp} 
+            transition={{ delay: 0.1 }} 
+            className="s-philosophy-desc leading-loose max-w-3xl mx-auto font-medium"
+            style={{
+              fontSize: content.philosophyDescSize ? `${content.philosophyDescSize}px` : undefined,
+              color: content.philosophyDescColor || '#E5E7EB',
+              textAlign: (content.philosophyDescAlign || 'center') as any,
+              fontWeight: content.philosophyDescBold ? '700' : 'normal'
+            }}
+          >
+            {content.philosophyDesc || 'Named after the sheer number of times Rich had to overcome the impossible...'}
           </motion.p>
         </div>
       </section>
+
 
       {/* Meet Our Founder Section */}
       <section id="founder" className="py-32 bg-white px-6 md:px-24">
@@ -184,7 +791,7 @@ export default function Home() {
             <motion.div {...fadeInUp} className="space-y-10">
               <div className="space-y-4">
                 <h4 className="text-[10px] uppercase tracking-[0.4em] text-gray-400 font-black">The Founder</h4>
-                <h3 className="text-6xl font-black tracking-tighter">Rich Canci</h3>
+                <h3 className="s-founder-title tracking-tighter">Rich Canci</h3>
               </div>
 
               {/* Quote Box */}
@@ -194,7 +801,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="space-y-8 text-gray-500 leading-relaxed text-lg">
+              <div className="s-founder-desc space-y-8 leading-relaxed">
                 <p>
                   Rich Canci is a proud six-time cancer survivor and amputee who founded the Five Time Foundation™ in 2016. After facing the immense physical, emotional, and financial challenges that come with multi-stage cancer treatments and eventual limb loss, Rich dedicated his life to ensuring others don't have to walk that path alone.
                 </p>
@@ -211,7 +818,7 @@ export default function Home() {
             <motion.div {...fadeInUp} transition={{ delay: 0.2 }} className="relative">
               <div className="aspect-[4/5] rounded-[3rem] overflow-hidden bg-brand-gray shadow-2xl relative">
                 <img 
-                  src={`/rich.png?v=${v}`} 
+                  src={content.rich || `/rich.png?v=${v}`} 
                   alt="Rich Canci - 5X Cancer Foundation Founder" 
                   className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
                 />
@@ -220,7 +827,6 @@ export default function Home() {
                 {/* 6X Survivor Badge */}
                 <div className="absolute bottom-[-20px] right-[-20px] bg-black text-white p-8 md:p-10 rounded-3xl shadow-2xl border-4 border-white transition-transform hover:scale-105">
                   <div className="text-4xl md:text-5xl font-black mb-1">6X</div>
-                  <div className="text-[10px] md:text-xs font-black uppercase tracking-widest opacity-60">Survivor</div>
                 </div>
               </div>
             </motion.div>
@@ -228,10 +834,22 @@ export default function Home() {
         </div>
       </section>
 
+      <AdBanner
+        type={content.adMiddleType || "media"}
+        desktop={content.adMiddleDesktop}
+        tablet={content.adMiddleTablet}
+        mobile={content.adMiddleMobile}
+        link={content.adMiddleLink}
+        html={content.adMiddleHtml}
+        slotName="middle"
+        fit={content.adMiddleSize}
+        position={content.adMiddlePosition}
+      />
+
       {/* Survivor Stories Section */}
       <section id="stories" className="py-32 bg-black px-6 md:px-24 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
-          <motion.h2 {...fadeInUp} className="text-5xl md:text-7xl font-black tracking-tight mb-24 text-center uppercase text-white italic">{content.storiesTitle}</motion.h2>
+          <motion.h2 {...fadeInUp} className="s-stories-title tracking-tight mb-24 uppercase italic">{content.storiesTitle}</motion.h2>
           
           {/* Metrics Banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-40 bg-white/5 p-12 md:p-20 rounded-[4rem] shadow-2xl border border-white/10 relative overflow-hidden">
@@ -259,95 +877,52 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 gap-24 md:gap-40">
-            {/* Elena Rodriguez */}
-            <div className="flex flex-col lg:flex-row gap-12 md:gap-20 items-center">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="w-full lg:w-2/5 aspect-[4/5] rounded-[3rem] overflow-hidden bg-white/5 shadow-2xl relative group border border-white/10"
-              >
-                <img src="/images/stories/elena.png" alt="Elena Rodriguez" className="w-full h-full object-cover grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-10 flex flex-col justify-end">
-                   <p className="text-brand-blue font-black text-xs uppercase tracking-widest">Outdoor Mentor</p>
-                </div>
-              </motion.div>
-              <motion.div {...fadeInUp} className="flex-1 space-y-8">
-                <div className="space-y-4">
-                  <h4 className="text-[10px] uppercase tracking-[0.6em] text-brand-blue font-black">Success Story</h4>
-                  <h3 className="text-5xl md:text-7xl font-black tracking-tighter italic text-white leading-none">Elena Rodriguez</h3>
-                </div>
-                <div className="space-y-6 text-lg md:text-xl text-gray-400 leading-relaxed font-medium">
-                  <p>Elena was diagnosed with osteosarcoma in her early 30s, which eventually led to an above-the-knee amputation. While she beat the cancer, the loss of her leg felt like the loss of her identity. High-performance "running blades" were financially out of reach, and she felt isolated from her old hiking groups.</p>
-                  <div className="bg-white/5 p-10 rounded-3xl border-l-[6px] border-brand-blue">
-                    <p className="text-white font-bold leading-loose">The foundation provided Elena with a grant to cover the out-of-pocket costs for a specialized prosthetic limb designed for athletic activity. Beyond the hardware, Elena joined a 5X-sponsored community meet-up where she met other amputee athletes. Today, she isn't just walking; she’s mentoring other survivors on how to navigate local trails.</p>
+            {stories.map((story, i) => (
+              <div key={story.id || i} className={`flex flex-col ${i % 2 === 1 ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-12 md:gap-20 items-center`}>
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  className="w-full lg:w-2/5 aspect-[4/5] rounded-[3rem] overflow-hidden bg-white/5 shadow-2xl relative group border border-white/10"
+                >
+                  <StorySlideshow source={story.img} name={story.name} v={v} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-10 flex flex-col justify-end">
+                     <p className="text-brand-blue font-black text-xs uppercase tracking-widest">{story.tag}</p>
                   </div>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Marcus Thorne */}
-            <div className="flex flex-col lg:flex-row-reverse gap-12 md:gap-20 items-center">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="w-full lg:w-2/5 aspect-[4/5] rounded-[3rem] overflow-hidden bg-white/5 shadow-2xl relative group border border-white/10"
-              >
-                <img src="/images/stories/marcus.png" alt="Marcus Thorne" className="w-full h-full object-cover grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-10 flex flex-col justify-end">
-                   <p className="text-brand-blue font-black text-xs uppercase tracking-widest">Creative Force</p>
-                </div>
-              </motion.div>
-              <motion.div {...fadeInUp} className="flex-1 space-y-8">
-                <div className="space-y-4">
-                  <h4 className="text-[10px] uppercase tracking-[0.6em] text-brand-blue font-black">Success Story</h4>
-                  <h3 className="text-5xl md:text-7xl font-black tracking-tighter italic text-white leading-none">Marcus Thorne</h3>
-                </div>
-                <div className="space-y-6 text-lg md:text-xl text-gray-400 leading-relaxed font-medium">
-                  <p>Marcus faced a rare soft-tissue sarcoma that resulted in the loss of his dominant arm. As a freelancer, the mounting care-related costs—travel for treatments, specialized physical therapy, and home modifications—began to overwhelm his family’s savings.</p>
-                  <div className="bg-white/5 p-10 rounded-3xl border-l-[6px] border-brand-blue">
-                    <p className="text-white font-bold leading-loose">The 5X Foundation stepped in to ease the burden of care-related costs, allowing Marcus to focus on his rehabilitation without the looming threat of debt. Through the foundation’s community events, Marcus found a "supportive community grounded in purpose," eventually designing a limited-edition merchandise line for the foundation, which helped him reclaim his confidence as a creator.</p>
+                </motion.div>
+                <motion.div {...fadeInUp} className="flex-1 space-y-8">
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] uppercase tracking-[0.6em] text-brand-blue font-black">Success Story</h4>
+                    <h3 className="text-5xl md:text-7xl font-black tracking-tighter italic text-white leading-none">{story.name}</h3>
                   </div>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Chloe Chen */}
-            <div className="flex flex-col lg:flex-row gap-12 md:gap-20 items-center">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                className="w-full lg:w-2/5 aspect-[4/5] rounded-[3rem] overflow-hidden bg-white/5 shadow-2xl relative group border border-white/10"
-              >
-                <img src="/images/stories/chloe.png" alt="Chloe Chen" className="w-full h-full object-cover grayscale transition-all duration-700 group-hover:grayscale-0 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-10 flex flex-col justify-end">
-                   <p className="text-brand-blue font-black text-xs uppercase tracking-widest">Academic Excellence</p>
-                </div>
-              </motion.div>
-              <motion.div {...fadeInUp} className="flex-1 space-y-8">
-                <div className="space-y-4">
-                  <h4 className="text-[10px] uppercase tracking-[0.6em] text-brand-blue font-black">Success Story</h4>
-                  <h3 className="text-5xl md:text-7xl font-black tracking-tighter italic text-white leading-none">Chloe Chen</h3>
-                </div>
-                <div className="space-y-6 text-lg md:text-xl text-gray-400 leading-relaxed font-medium">
-                  <p>Chloe was diagnosed with cancer during her sophomore year. The surgery to save her life resulted in limb loss, and she struggled with the "why me" of it all. She felt out of place on a college campus and worried that she would never have the stamina or the self-assurance to finish her degree.</p>
-                  <div className="bg-white/5 p-10 rounded-3xl border-l-[6px] border-brand-blue">
-                    <p className="text-white font-bold leading-loose">Chloe attended a Five Time Foundation™ nightlife fundraiser, where she saw people celebrating life and strength despite their scars. The foundation’s "strength and perseverance" philosophy resonated with her. 5X helped facilitate a connection with a mentor—another survivor who had navigated the professional world with a prosthetic—giving Chloe the social and emotional "connection" she needed to return to school and graduate top of her class.</p>
+                  <div className="space-y-6 text-lg md:text-xl text-gray-400 leading-relaxed font-medium">
+                    <p>{story.journey}</p>
+                    <div className="bg-white/5 p-10 rounded-3xl border-l-[6px] border-brand-blue">
+                      <p className="text-white font-bold leading-loose">{story.help}</p>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            </div>
+                </motion.div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* How We Raise Funds Section */}
-      <section className="py-32 bg-[#1A1C23] text-white px-6 md:px-24">
-        <div className="max-w-5xl mx-auto text-center space-y-12">
-          <motion.h2 {...fadeInUp} className="text-6xl md:text-8xl font-black tracking-tighter uppercase italic leading-none">{content.fundraisingTitle}</motion.h2>
-          <motion.p {...fadeInUp} className="text-xl text-gray-400 font-medium leading-relaxed max-w-3xl mx-auto">
+      <section 
+        className="py-32 bg-[#1A1C23] text-white px-6 md:px-24 relative overflow-hidden"
+        style={{
+          backgroundImage: content.fundraisingBg ? `url(${content.fundraisingBg})` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        {content.fundraisingBg && (
+          <div className="absolute inset-0 bg-black/75 z-0" />
+        )}
+        <div className="max-w-5xl mx-auto text-center space-y-12 relative z-10">
+          <motion.h2 {...fadeInUp} className="s-fundraising-title tracking-tighter uppercase italic leading-none">{content.fundraisingTitle}</motion.h2>
+          <motion.p {...fadeInUp} className="s-fundraising-desc leading-relaxed max-w-3xl mx-auto">
             {content.fundraisingDesc}
           </motion.p>
           <motion.div {...fadeInUp} className="pt-8 flex justify-center">
@@ -365,8 +940,8 @@ export default function Home() {
       {/* Fuel the Fight - Donation Section */}
       <section id="donate" className="py-32 bg-gray-50 px-6 md:px-24">
         <div className="max-w-7xl mx-auto text-center mb-16">
-          <motion.h2 {...fadeInUp} className="text-6xl md:text-7xl font-black tracking-tighter mb-6 uppercase">{content.donationTitle}</motion.h2>
-          <motion.p {...fadeInUp} transition={{ delay: 0.1 }} className="text-gray-500 max-w-2xl mx-auto font-medium leading-relaxed">
+          <motion.h2 {...fadeInUp} className="s-donation-title mb-6 uppercase">{content.donationTitle}</motion.h2>
+          <motion.p {...fadeInUp} transition={{ delay: 0.1 }} className="s-donation-desc max-w-2xl mx-auto leading-relaxed">
             {content.donationDesc}
           </motion.p>
         </div>
@@ -374,76 +949,24 @@ export default function Home() {
         <motion.div 
           {...fadeInUp} 
           transition={{ delay: 0.2 }}
-          className="max-w-5xl mx-auto bg-white rounded-[3.5rem] p-10 md:p-14 shadow-2xl flex flex-col lg:flex-row gap-12 border border-gray-100"
+          className="max-w-6xl mx-auto w-full"
         >
-          {/* Donation Form */}
-          <div className="flex-1 space-y-10">
-            {/* Frequency Tabs */}
-            <div className="flex bg-gray-100 rounded-3xl p-1.5 max-w-sm">
-              {["One-time", "Monthly"].map((f) => (
-                <button 
-                  key={f}
-                  onClick={() => setFreq(f)}
-                  className={`flex-1 font-black text-[10px] py-4 rounded-2xl uppercase tracking-widest transition-all ${freq === f ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'}`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-
-            {/* Amount Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              {["$25", "$50", "$100", "$250", "$500", "$ Other"].map((amt) => (
-                <button 
-                  key={amt}
-                  onClick={() => setAmount(amt)}
-                  className={`py-6 rounded-2xl font-black text-xl transition-all border-2 ${amount === amt ? 'border-black bg-white scale-105 shadow-xl shadow-black/5 z-10' : 'border-gray-50 bg-gray-50 text-gray-400 hover:border-brand-blue hover:bg-white hover:text-black'}`}
-                >
-                  {amt}
-                </button>
-              ))}
-            </div>
-
-            <button className="w-full bg-black text-white py-10 rounded-[2.5rem] font-black text-lg uppercase tracking-[0.4em] flex items-center justify-center gap-4 hover:bg-brand-blue transition-all shadow-2xl shadow-black/20">
-               Process Donation
-            </button>
-
-            <div className="space-y-6 pt-2">
-              <div className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] flex items-center justify-center gap-2">
-                🛡️ Secure Encrypted Payment via Stripe
-              </div>
-              <PaymentMethods />
-            </div>
-          </div>
-
-          {/* Impact Info */}
-          <div className="lg:w-80 bg-black text-white rounded-[2.5rem] p-12 space-y-10 flex flex-col justify-between">
-            <div>
-              <h4 className="text-2xl font-black mb-10">Your Impact</h4>
-              <div className="space-y-8">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 font-black text-sm">
-                    <span className="text-xl text-brand-blue">⚡</span> $25 pays for...
-                  </div>
-                  <p className="text-xs text-gray-400 font-medium leading-relaxed">Essential physical therapy materials for a new amputee.</p>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 font-black text-sm">
-                    <span className="text-xl text-brand-blue">❤️</span> $100 funds...
-                  </div>
-                  <p className="text-xs text-gray-400 font-medium leading-relaxed">A specialized consultation with a prosthetic specialist.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-10 border-t border-white/10 italic text-[11px] font-medium leading-relaxed text-gray-400">
-              "Small contributions build big movements. Thank you for being part of the team."
-              <span className="block mt-4 not-italic font-black text-white">— Rich Canci</span>
-            </div>
-          </div>
+          <DonationCard />
         </motion.div>
+
       </section>
+
+      <AdBanner
+        type={content.adBottomType || "media"}
+        desktop={content.adBottomDesktop}
+        tablet={content.adBottomTablet}
+        mobile={content.adBottomMobile}
+        link={content.adBottomLink}
+        html={content.adBottomHtml}
+        slotName="bottom"
+        fit={content.adBottomSize}
+        position={content.adBottomPosition}
+      />
     </div>
   );
 }
-

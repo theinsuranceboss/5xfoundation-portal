@@ -3,43 +3,56 @@
 import { motion } from "framer-motion";
 import { Calendar, MapPin, Clock, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
+import { getSiteContent } from "@/lib/supabase";
 
 export default function EventsPage() {
   const [v, setV] = useState(0);
-
-  useEffect(() => {
-    setV(Date.now());
-  }, []);
-
-  const upcomingEvents = [
+  const [events, setEvents] = useState([
     {
-      id: 1,
+      id: 'event_1',
       title: "Warrior Walk 2026",
       date: "May 15, 2026",
       time: "09:00 AM",
-      location: "Central Park, NY",
-      description: "Our annual community walk to raise awareness and funds for cancer warrior support.",
-      image: `/event_1.png?v=${v}`
+      loc: "Central Park, NY",
+      desc: "Our annual community walk to raise awareness and funds for cancer warrior support.",
+      img: "/event_1.png"
     },
     {
-      id: 2,
+      id: 'event_2',
       title: "Symmetry Pop-up",
       date: "June 02, 2026",
       time: "11:00 AM",
-      location: "SoHo, NY",
-      description: "Connect with the community and snag exclusive 5X gear.",
-      image: `/event_2.png?v=${v}`
+      loc: "SoHo, NY",
+      desc: "Connect with the community and snag exclusive 5X gear.",
+      img: "/event_2.png"
     },
     {
-      id: 3,
+      id: 'event_3',
       title: "Warrior Tech Expo",
       date: "July 20, 2026",
       time: "10:00 AM",
-      location: "Long Island City, NY",
-      description: "Presenting advancements in prosthetic tech for cancer survivors.",
-      image: `/event_3.png?v=${v}`
+      loc: "Long Island City, NY",
+      desc: "Presenting advancements in prosthetic tech for cancer survivors.",
+      img: "/event_3.png"
     }
-  ];
+  ]);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const dbEvents = await getSiteContent('siteEvents');
+        if (dbEvents) {
+          setEvents(JSON.parse(dbEvents));
+        }
+      } catch (err) {
+        console.error("Failed to load events from Supabase, falling back to localStorage:", err);
+        const savedEvents = localStorage.getItem('siteEvents');
+        if (savedEvents) setEvents(JSON.parse(savedEvents));
+      }
+      setV(Date.now());
+    }
+    loadData();
+  }, []);
 
   return (
     <div className="py-24 px-6 bg-white min-h-screen">
@@ -51,9 +64,9 @@ export default function EventsPage() {
         </header>
 
         <div className="space-y-12">
-          {upcomingEvents.map((event, index) => (
+          {events.map((event, index) => (
             <motion.div
-              key={event.id}
+              key={event.id || index}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -61,7 +74,7 @@ export default function EventsPage() {
               className="bg-gray-50 rounded-[2.5rem] p-8 md:p-10 flex flex-col md:flex-row items-center gap-10 hover:shadow-2xl hover:bg-white transition-all group border border-transparent hover:border-black/5"
             >
               <div className="w-full md:w-1/3 aspect-square relative rounded-3xl overflow-hidden shadow-xl bg-gray-200">
-                 <img src={event.image} alt={event.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                 <img src={`${event.img}?v=${v}`} alt={event.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                  <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors" />
               </div>
 
@@ -70,10 +83,10 @@ export default function EventsPage() {
                   <Calendar size={14} className="text-black" /> {event.date}
                 </div>
                 <h3 className="text-3xl md:text-4xl font-black mb-4 tracking-tight group-hover:text-black transition-colors leading-none uppercase italic">{event.title}</h3>
-                <p className="text-gray-500 mb-8 leading-relaxed text-sm font-medium">{event.description}</p>
+                <p className="text-gray-500 mb-8 leading-relaxed text-sm font-medium">{event.desc}</p>
                 <div className="flex flex-wrap gap-8 text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  <span className="flex items-center gap-2 text-black"><Clock size={16} /> {event.time}</span>
-                  <span className="flex items-center gap-2 text-black"><MapPin size={16} /> {event.location}</span>
+                  {event.time && <span className="flex items-center gap-2 text-black"><Clock size={16} /> {event.time}</span>}
+                  <span className="flex items-center gap-2 text-black"><MapPin size={16} /> {event.loc}</span>
                 </div>
               </div>
               

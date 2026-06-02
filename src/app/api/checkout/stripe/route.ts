@@ -1,0 +1,74 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+
+export async function POST(req: NextRequest) {
+  try {
+    const { sessionId } = await req.json();
+
+    if (!sessionId) {
+      return NextResponse.json({ error: 'sessionId is required' }, { status: 400 });
+    }
+
+    // Fetch cart items
+    const cartItems = await db.cartItem.findMany({
+      where: { sessionId },
+      include: {
+        product: {
+          include: {
+            images: true
+          }
+        }
+      }
+    });
+
+    if (cartItems.length === 0) {
+      return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const secretKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder';
+
+    // Build Form Data for Stripe REST API
+    const formParams = new URLSearchParams();
+    formParams.append('payment_method_types[0]', 'card');
+    formParams.append('shipping_address_collection[allowed_countries][0]', 'US');
+    formParams.append('shipping_address_collection[allowed_countries][1]', 'CA');
+    formParams.append('mode', 'payment');
+    formParams.append('success_url', `${appUrl}/success?session_id={CHECKOUT_SESSION_ID}`);
+    formParams.append('cancel_url', `${appUrl}/merch`);
+    formParams.append('metadata[cart_session_id]', sessionId);
+
+    cartItems.forEach((item: any, i: number) => {
+      const colorLower = item.color.toLowerCase();
+      const img = item.product.images.find((img: any) => img.url.toLowerCase().includes(colorLower)) || item.product.images[0];
+      
+      formParams.append(`line_items[${i}][price_data][currency]`, 'usd');
+      formParams.append(`line_items[${i}][price_data][product_data][name]`, `${item.product.title} - ${item.color} / ${item.size}`);
+      if (img?.url) {
+        formParams.append(`line_items[${i}][price_data][product_data][images][0]`, img.url);
+      }
+      formParams.append(`line_items[${i}][price_data][unit_amount]`, Math.round(item.product.price * 100).toString());
+      formParams.append(`line_items[${i}][quantity]`, item.quantity.toString());
+    });
+
+    const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formParams.toString()
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || 'Failed to create session');
+    }
+
+    return NextResponse.json({ url: data.url });
+  } catch (error: any) {
+    console.error('Stripe checkout error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

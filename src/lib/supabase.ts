@@ -12,17 +12,19 @@ export async function getSiteContent(key: string) {
     .from('site_content')
     .select('content')
     .eq('section_key', key)
-    .single()
+    .maybeSingle()
   
-  if (error) return null
+  if (error || !data) return null
   return data.content
 }
 
 export async function updateSiteContent(key: string, content: string) {
   const { error } = await supabase
     .from('site_content')
-    .update({ content, updated_at: new Date().toISOString() })
-    .eq('section_key', key)
+    .upsert(
+      { section_key: key, content, updated_at: new Date().toISOString() },
+      { onConflict: 'section_key' }
+    )
   
   return { success: !error, error }
 }

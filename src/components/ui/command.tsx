@@ -1,0 +1,11 @@
+// Unused scaffolded command file (emptied to avoid compilation errors)
+import * as React from "react"
+export const Command = () => null;
+export const CommandDialog = () => null;
+export const CommandInput = () => null;
+export const CommandList = () => null;
+export const CommandEmpty = () => null;
+export const CommandGroup = () => null;
+export const CommandItem = () => null;
+export const CommandShortcut = () => null;
+export const CommandSeparator = () => null;
