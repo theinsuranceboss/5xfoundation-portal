@@ -2,5 +2,7 @@
 package = "@netlify/plugin-nextjs"
 
 [build]
-publish = ".next-prod"
-command = "set NEXT_BUILD_DIR=.next-prod&& npm run build"
+command = "npm run build"
+
+[build.environment]
+NEXT_BUILD_DIR = ".next"

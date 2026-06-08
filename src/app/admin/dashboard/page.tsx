@@ -103,6 +103,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'content' | 'ads' | 'events' | 'merch' | 'who_we_help' | 'media' | 'theme' | 'donations'>('media');
   const [isSaving, setIsSaving] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   
   // Real paths that reflect what is on the server
   const [siteImages, setSiteImages] = useState([
@@ -1466,73 +1467,16 @@ export default function AdminDashboard() {
                         onChange={(e) => setContent(prev => ({ ...prev, shopBannerPosition: e.target.value }))}
                       >
                         <option value="center">Center</option>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Fit</label>
-                            <select 
-                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
-                              value={content.donateBannerSize || 'fill'}
-                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerSize: e.target.value }))}
-                            >
-                              <option value="fill">Fill</option>
-                              <option value="centered">Centered</option>
-                              <option value="stretch">Stretch</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Alignment / Position</label>
-                            <select 
-                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
-                              value={content.donateBannerPosition || 'center'}
-                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerPosition: e.target.value }))}
-                            >
-                              <option value="center">Center</option>
-                              <option value="top">Top</option>
-                              <option value="bottom">Bottom</option>
-                              <option value="left">Left</option>
-                              <option value="right">Right</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-150">
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Layout Mode</label>
-                            <select 
-                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
-                              value={content.donateBannerLayout || 'full'}
-                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerLayout: e.target.value }))}
-                            >
-                              <option value="split">Split Screen</option>
-                              <option value="full">Full Overlay</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Text Placement / Alignment</label>
-                            <select 
-                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
-                              value={content.donateBannerPlacement || 'center'}
-                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerPlacement: e.target.value }))}
-                            >
-                              <option value="left">Left</option>
-                              <option value="center">Center</option>
-                              <option value="right">Right</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2 sm:col-span-2">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Click Hyperlink Redirect URL</label>
-                            <input 
-                              type="text"
-                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
-                              placeholder="https://example.com"
-                              value={content.donateBannerLink || ''}
-                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerLink: e.target.value }))}
-                            />
-                          </div>
-                        </div>
+                        <option value="top">Top</option>
+                        <option value="bottom">Bottom</option>
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+                  </div>
 
                   {/* Live Interactive Preview for Shop Banner */}
-                  {`{(() => {
+                  {(() => {
                     const previewImg = content.shopBanner || '/shop_banner.png';
                     const isSplit = (content.shopBannerLayout || 'full') === 'split';
                     const isCenter = content.shopBannerPlacement === 'center';
@@ -1551,9 +1495,9 @@ export default function AdminDashboard() {
                             <button
                               type="button"
                               onClick={() => setPreviewDevice('desktop')}
-                              className={\`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
                                 previewDevice === 'desktop' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                              }\`}
+                              }`}
                             >
                               <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                               Desktop
@@ -1561,9 +1505,9 @@ export default function AdminDashboard() {
                             <button
                               type="button"
                               onClick={() => setPreviewDevice('tablet')}
-                              className={\`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
                                 previewDevice === 'tablet' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                              }\`}
+                              }`}
                             >
                               <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                               Tablet
@@ -1571,9 +1515,9 @@ export default function AdminDashboard() {
                             <button
                               type="button"
                               onClick={() => setPreviewDevice('mobile')}
-                              className={\`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
                                 previewDevice === 'mobile' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                              }\`}
+                              }`}
                             >
                               <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                               Phone
@@ -1641,7 +1585,7 @@ export default function AdminDashboard() {
                                   style={{
                                     width: previewDevice === 'desktop' ? '50%' : '100%',
                                     height: previewDevice === 'desktop' ? '100%' : '50%',
-                                    backgroundImage: \`url(${previewImg})\`,
+                                    backgroundImage: `url(${previewImg})`,
                                     backgroundSize: 
                                       content.shopBannerSize === 'fit' || content.shopBannerSize === 'contain' ? 'contain' :
                                       content.shopBannerSize === 'stretch' ? '100% 100%' : 'cover',
@@ -1656,7 +1600,7 @@ export default function AdminDashboard() {
                                 <div 
                                   className="absolute inset-0 bg-zinc-900"
                                   style={{
-                                    backgroundImage: \`url(${previewImg})\`,
+                                    backgroundImage: `url(${previewImg})`,
                                     backgroundSize: 
                                       content.shopBannerSize === 'fit' || content.shopBannerSize === 'contain' ? 'contain' :
                                       content.shopBannerSize === 'stretch' ? '100% 100%' : 'cover',
@@ -1707,7 +1651,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     );
-                  })()}`}
+                  })()}
                   
                   <div className="flex flex-col sm:flex-row justify-between items-center bg-white border border-gray-150 rounded-2xl p-4 gap-4">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
