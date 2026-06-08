@@ -2,45 +2,49 @@
 
 import { useStore, Product } from '@/lib/store';
 import { ProductCard } from './product-card';
-import { Button } from '@/components/ui/button';
 
 export function ProductGrid() {
   const { products, categories, selectedCategory, setSelectedCategory, setSelectedProduct } = useStore();
 
-  const filteredProducts = selectedCategory === 'all'
+  const filteredProducts = (selectedCategory === 'all'
     ? products
-    : products.filter((p) => p.category?.slug === selectedCategory);
+    : products.filter((p) => p.category?.slug === selectedCategory)
+  ).filter((p) => p.category?.slug !== 'donations');
 
-  // Filter out "all" from the category list for the buttons
-  const displayCategories = categories.filter((c) => c.slug !== 'all');
+  // Filter out "all" and "donations" from the category list for the buttons
+  const displayCategories = categories.filter((c) => c.slug !== 'all' && c.slug !== 'donations');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Category Filter Buttons */}
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={selectedCategory === 'all' ? 'default' : 'outline'}
-            size="sm"
+        <div className="inline-flex flex-wrap items-center gap-1.5 bg-gray-50/80 hover:bg-gray-50 border border-gray-200/60 p-2 rounded-2xl md:rounded-full shadow-sm transition-colors duration-200 backdrop-blur-sm">
+          <button
             onClick={() => setSelectedCategory('all')}
-            className={selectedCategory === 'all' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:border-blue-300 hover:text-blue-700'}
+            className={`px-6 py-2.5 rounded-xl md:rounded-full text-sm font-bold tracking-tight transition-all duration-300 select-none ${
+              selectedCategory === 'all'
+                ? 'bg-black text-white shadow-md hover:bg-gray-800'
+                : 'text-gray-500 hover:text-black hover:bg-gray-200/50 bg-transparent'
+            }`}
           >
             All Products
-          </Button>
+          </button>
           {displayCategories.map((cat) => (
-            <Button
+            <button
               key={cat.id}
-              variant={selectedCategory === cat.slug ? 'default' : 'outline'}
-              size="sm"
               onClick={() => setSelectedCategory(cat.slug)}
-              className={selectedCategory === cat.slug ? 'bg-blue-600 hover:bg-blue-700' : 'hover:border-blue-300 hover:text-blue-700'}
+              className={`px-6 py-2.5 rounded-xl md:rounded-full text-sm font-bold tracking-tight transition-all duration-300 select-none ${
+                selectedCategory === cat.slug
+                  ? 'bg-black text-white shadow-md hover:bg-gray-800'
+                  : 'text-gray-500 hover:text-black hover:bg-gray-200/50 bg-transparent'
+              }`}
             >
               {cat.name}
-            </Button>
+            </button>
           ))}
         </div>
-        <p className="text-sm text-gray-500">
-          Showing <span className="font-semibold text-gray-700">{filteredProducts.length}</span> product{filteredProducts.length !== 1 ? 's' : ''}
+        <p className="text-sm text-gray-400 font-medium tracking-wide">
+          Showing <span className="font-bold text-black">{filteredProducts.length}</span> product{filteredProducts.length !== 1 ? 's' : ''}
         </p>
       </div>
 

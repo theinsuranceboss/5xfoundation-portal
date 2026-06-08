@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Use custom build directory only for local development to avoid Windows file locks.
-  // Production builds (both local and Netlify) will use the default '.next' directory.
-  distDir: process.env.NODE_ENV === 'development' ? '.next-dev-local' : undefined,
+  // Use custom build directory to avoid Windows file locks during local production builds/deploys.
+  distDir: process.env.NEXT_BUILD_DIR || (process.env.NODE_ENV === 'development' ? '.next-local' : '.next'),
   images: {
     remotePatterns: [
       {

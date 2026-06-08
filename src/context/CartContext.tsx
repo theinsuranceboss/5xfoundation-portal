@@ -35,26 +35,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Load from localStorage on mount
+  // Load from sessionStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("shopping_cart");
+      const saved = sessionStorage.getItem("shopping_cart");
       if (saved) {
         setCartItems(JSON.parse(saved));
       }
     } catch (e) {
-      console.error("Failed to load cart from localStorage", e);
+      console.error("Failed to load cart from sessionStorage", e);
     }
     setIsHydrated(true);
   }, []);
 
-  // Save to localStorage whenever cart changes
+  // Save to sessionStorage whenever cart changes
   useEffect(() => {
     if (!isHydrated) return;
     try {
-      localStorage.setItem("shopping_cart", JSON.stringify(cartItems));
+      sessionStorage.setItem("shopping_cart", JSON.stringify(cartItems));
     } catch (e) {
-      console.error("Failed to save cart to localStorage", e);
+      console.error("Failed to save cart to sessionStorage", e);
     }
   }, [cartItems, isHydrated]);
 

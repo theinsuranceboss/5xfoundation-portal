@@ -4,30 +4,75 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Lock, User, ArrowRight, ShieldCheck } from "lucide-react";
-import Image from "next/image";
+import { getSiteContent } from "@/lib/supabase";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Credentials requested by the user: admin / cancer
-    if (username === "admin" && password === "cancer") {
-      // In a real app, set a cookie or JWT
-      localStorage.setItem("admin_auth", "true");
-      router.push("/admin/dashboard");
-    } else {
-      setError("Invalid credentials. Access denied.");
+    setError("");
+    setLoading(true);
+
+    try {
+      let authorized = false;
+      
+      // Load custom admin list from Supabase
+      const dbAdmins = await getSiteContent('adminUsers');
+      let adminList: any[] = [];
+      if (dbAdmins) {
+        try {
+          adminList = JSON.parse(dbAdmins);
+        } catch (e) {
+          console.error("Failed to parse dbAdmins:", e);
+        }
+      } else {
+        // Fallback to cache
+        const cached = localStorage.getItem('adminUsers');
+        if (cached) {
+          try {
+            adminList = JSON.parse(cached);
+          } catch (e) {}
+        }
+      }
+
+      if (adminList && adminList.length > 0) {
+        authorized = adminList.some((u: any) => u.username === username && u.password === password);
+      }
+
+      // Safe fallback credentials
+      if (!authorized) {
+        authorized = (username === "admin" && password === "cancer");
+      }
+
+      if (authorized) {
+        localStorage.setItem("admin_auth", "true");
+        router.push("/admin/dashboard");
+      } else {
+        setError("Invalid credentials. Access denied.");
+      }
+    } catch (err) {
+      console.error(err);
+      // Hard fallback
+      if (username === "admin" && password === "cancer") {
+        localStorage.setItem("admin_auth", "true");
+        router.push("/admin/dashboard");
+      } else {
+        setError("Invalid credentials. Access denied.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-brand-black flex items-center justify-center px-6 py-24">
       <div className="absolute inset-0 z-0 opacity-20">
-        <Image src="/hero.png" alt="Background" fill className="object-cover grayscale" />
+        <img src="/hero.png" alt="Background" className="absolute inset-0 w-full h-full object-cover grayscale" />
       </div>
 
       <motion.div 
@@ -82,9 +127,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-brand-black text-white py-6 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-brand-blue transition-all shadow-xl active:scale-95"
+            disabled={loading}
+            className="w-full bg-brand-black text-white py-6 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-brand-blue transition-all shadow-xl active:scale-95 disabled:opacity-50"
           >
-            Authenticate <ArrowRight size={18} />
+            {loading ? "Authenticating..." : "Authenticate"} <ArrowRight size={18} />
           </button>
         </form>
 

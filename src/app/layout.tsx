@@ -22,6 +22,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Five Time Foundation™ | Empowering Cancer Warriors",
   description: "Five Time Foundation™ empowers cancer warriors to reclaim mobility, confidence, and connection after limb loss. Founded by 6-time survivor Rich Canci.",
+  openGraph: {
+    title: "Five Time Foundation™ | Empowering Cancer Warriors",
+    description: "Five Time Foundation™ empowers cancer warriors to reclaim mobility, confidence, and connection after limb loss. Founded by 6-time survivor Rich Canci.",
+    images: [
+      {
+        url: "https://lh3.googleusercontent.com/d/1GloYcyjba51jJK933pSBzQJcfrc_H43Y",
+        width: 1200,
+        height: 630,
+        alt: "Five Time Foundation™ Logo",
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Five Time Foundation™ | Empowering Cancer Warriors",
+    description: "Five Time Foundation™ empowers cancer warriors to reclaim mobility, confidence, and connection after limb loss. Founded by 6-time survivor Rich Canci.",
+    images: ["https://lh3.googleusercontent.com/d/1GloYcyjba51jJK933pSBzQJcfrc_H43Y"],
+  }
 };
 
 import MainLayoutWrapper from "@/components/MainLayoutWrapper";

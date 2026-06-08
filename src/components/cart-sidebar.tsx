@@ -145,8 +145,30 @@ export function CartSidebar() {
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.paypal) {
-      setIsSdkLoaded(true);
+    if (typeof window !== "undefined") {
+      if (window.paypal) {
+        setIsSdkLoaded(true);
+        return;
+      }
+
+      // Check if script is already in document
+      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (script) {
+        const handleLoad = () => setIsSdkLoaded(true);
+        script.addEventListener("load", handleLoad);
+
+        const interval = setInterval(() => {
+          if (window.paypal) {
+            setIsSdkLoaded(true);
+            clearInterval(interval);
+          }
+        }, 100);
+
+        return () => {
+          script.removeEventListener("load", handleLoad);
+          clearInterval(interval);
+        };
+      }
     }
   }, []);
 
@@ -154,7 +176,7 @@ export function CartSidebar() {
     <>
     <Script 
       src={`https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&components=buttons&disable-funding=card,credit,venmo,paylater`}
-      strategy="lazyOnload"
+      strategy="afterInteractive"
       onLoad={() => setIsSdkLoaded(true)}
       onReady={() => setIsSdkLoaded(true)}
     />

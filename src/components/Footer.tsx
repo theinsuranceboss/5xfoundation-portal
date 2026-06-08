@@ -57,7 +57,7 @@ export default function Footer() {
           name: parts[0]?.trim() || "",
           path: parts[1]?.trim() || ""
         };
-      }).filter(link => link.name && link.path)
+      }).filter(link => link.name && link.path && link.name.toUpperCase() !== "FOUNDER" && link.path !== "/#founder" && link.path !== "#founder")
     : [];
 
   const footerScale = parseFloat(content.footerSize || "1.0");

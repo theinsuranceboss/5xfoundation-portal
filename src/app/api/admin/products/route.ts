@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { db, batchUploadStorage, uploadDbToSupabase } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -54,36 +54,41 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    // Delete existing images and variants, then recreate
-    await db.productImage.deleteMany({ where: { productId: id } });
-    await db.productVariant.deleteMany({ where: { productId: id } });
+    const product = await batchUploadStorage.run(true, async () => {
+      // Delete existing images and variants, then recreate
+      await db.productImage.deleteMany({ where: { productId: id } });
+      await db.productVariant.deleteMany({ where: { productId: id } });
 
-    const product = await db.product.update({
-      where: { id },
-      data: {
-        title,
-        description,
-        price: parseFloat(price),
-        compareAt: compareAt ? parseFloat(compareAt) : null,
-        categoryId,
-        images: {
-          create: (images || []).map((img: { url: string; type: string; order: number }) => ({
-            url: img.url,
-            type: img.type,
-            order: img.order,
-          })),
+      return db.product.update({
+        where: { id },
+        data: {
+          title,
+          description,
+          price: parseFloat(price),
+          compareAt: compareAt ? parseFloat(compareAt) : null,
+          categoryId,
+          images: {
+            create: (images || []).map((img: { url: string; type: string; order: number }) => ({
+              url: img.url,
+              type: img.type,
+              order: img.order,
+            })),
+          },
+          variants: {
+            create: (variants || []).map((v: { color: string; size: string; stock: number; sku?: string }) => ({
+              color: v.color,
+              size: v.size,
+              stock: parseInt(String(v.stock)) || 0,
+              sku: v.sku || null,
+            })),
+          },
         },
-        variants: {
-          create: (variants || []).map((v: { color: string; size: string; stock: number; sku?: string }) => ({
-            color: v.color,
-            size: v.size,
-            stock: parseInt(String(v.stock)) || 0,
-            sku: v.sku || null,
-          })),
-        },
-      },
-      include: { category: true, images: true, variants: true },
+        include: { category: true, images: true, variants: true },
+      });
     });
+
+    // Upload the final SQLite file once to Supabase Storage
+    await uploadDbToSupabase();
 
     return NextResponse.json(product);
   } catch (error) {
@@ -101,9 +106,14 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    await db.productImage.deleteMany({ where: { productId: id } });
-    await db.productVariant.deleteMany({ where: { productId: id } });
-    await db.product.delete({ where: { id } });
+    await batchUploadStorage.run(true, async () => {
+      await db.productImage.deleteMany({ where: { productId: id } });
+      await db.productVariant.deleteMany({ where: { productId: id } });
+      await db.product.delete({ where: { id } });
+    });
+
+    // Upload the final SQLite file once to Supabase Storage
+    await uploadDbToSupabase();
 
     return NextResponse.json({ deleted: true });
   } catch (error) {

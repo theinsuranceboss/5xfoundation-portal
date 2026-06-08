@@ -17,7 +17,6 @@ function cn(...inputs: ClassValue[]) {
 
 const navItems = [
   { name: "HOME", href: "/" },
-  { name: "FOUNDER", href: "#founder" },
   { name: "SHOP", href: "/merch" },
   { name: "EVENTS", href: "/events" },
   { name: "DONATE", href: "/donate" },

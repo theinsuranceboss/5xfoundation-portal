@@ -178,6 +178,24 @@ export default function AdminDashboard() {
     shopBannerOverlay: "0.4",
     shopBannerSize: "fill",
     shopBannerPosition: "center",
+    shopBannerLayout: "full",
+    shopBannerPlacement: "center",
+    shopBannerLink: "",
+    eventBanner: "/shop_banner.png",
+    eventBannerHeight: "350",
+    eventBannerOverlay: "0.4",
+    eventBannerSize: "cover",
+    eventBannerPosition: "center",
+    eventTitle: "UPCOMING 5X EVENTS",
+    eventSubtitle: "Join us as we build a stronger network of warriors together.",
+    eventBannerTitleColor: "#FFFFFF",
+    eventBannerSubtitleColor: "#E5E7EB",
+    eventBannerLayout: "full",
+    eventBannerPlacement: "center",
+    eventBannerLink: "",
+    donateBannerLayout: "full",
+    donateBannerPlacement: "center",
+    donateBannerLink: "",
     heroTitleColor: "#FFFFFF",
     heroDescColor: "#F3F4F6",
     heroTitleSize: "120",
@@ -866,52 +884,79 @@ export default function AdminDashboard() {
           img.id === id ? { ...img, current: returnedUrl } : img
         ));
 
-        // If it's a global website asset, update it in content
-        if (['logo', 'hero_gdrive_link', 'rich', 'fundraisingBg', 'shopBanner', 'donateBanner', 'philosophyBg', 'everyDollarBgImage'].includes(id)) {
+        // 1. Is it a global website asset?
+        const contentKeys = [
+          'logo', 'hero_gdrive_link', 'rich', 'fundraisingBg', 'shopBanner', 'donateBanner', 
+          'philosophyBg', 'everyDollarBgImage', 'eventBanner',
+          'adTopDesktop', 'adTopTablet', 'adTopMobile',
+          'adMiddleDesktop', 'adMiddleTablet', 'adMiddleMobile',
+          'adBottomDesktop', 'adBottomTablet', 'adBottomMobile'
+        ];
+
+        if (contentKeys.includes(id)) {
+          let updatedContentValue = returnedUrl;
           if (id === 'hero_gdrive_link') {
-            setContent(prev => {
-              const currentLinks = prev.hero_gdrive_link || "";
-              const updated = currentLinks.trim() ? `${currentLinks}\n${returnedUrl}` : returnedUrl;
-              setSiteImages(sImg => sImg.map(img => 
-                img.id === id ? { ...img, current: updated } : img
-              ));
-              return { ...prev, hero_gdrive_link: updated };
-            });
-          } else {
-            setContent(prev => ({ ...prev, [id]: returnedUrl }));
+            const currentLinks = content.hero_gdrive_link || "";
+            updatedContentValue = currentLinks.trim() ? `${currentLinks}\n${returnedUrl}` : returnedUrl;
+            setSiteImages(sImg => sImg.map(img => 
+              img.id === id ? { ...img, current: updatedContentValue } : img
+            ));
           }
+          
+          const newContent = { ...content, [id]: updatedContentValue };
+          setContent(newContent);
+          await updateSiteContent('siteContent', JSON.stringify(newContent));
+          localStorage.setItem('siteContent', JSON.stringify(newContent));
+          window.dispatchEvent(new Event("siteContentUpdated"));
         }
 
-        setStories(prev => prev.map(s => {
-          if (s.id === id) {
-            const currentImg = s.img || "";
-            const isLegacy = currentImg.trim() === "" || currentImg.startsWith("/placeholder.png") || currentImg.startsWith("/images/stories/");
-            const updatedImg = isLegacy ? returnedUrl : `${currentImg}\n${returnedUrl}`;
-            return { ...s, img: updatedImg };
-          }
-          return s;
-        }));
-
-        if (id.endsWith('_back')) {
-          const prodId = id.replace('_back', '');
-          setMerch(prev => prev.map(m => 
-            m.id === prodId ? { ...m, imgBack: returnedUrl } : m
-          ));
-        } else {
-          setMerch(prev => prev.map(m => 
-            m.id === id ? { ...m, img: returnedUrl } : m
-          ));
+        // 2. Is it a survivor story?
+        if (stories.some(s => s.id === id)) {
+          const newStories = stories.map(s => {
+            if (s.id === id) {
+              const currentImg = s.img || "";
+              const isLegacy = currentImg.trim() === "" || currentImg.startsWith("/placeholder.png") || currentImg.startsWith("/images/stories/");
+              const updatedImg = isLegacy ? returnedUrl : `${currentImg}\n${returnedUrl}`;
+              return { ...s, img: updatedImg };
+            }
+            return s;
+          });
+          setStories(newStories);
+          await updateSiteContent('siteStories', JSON.stringify(newStories));
+          localStorage.setItem('siteStories', JSON.stringify(newStories));
         }
 
-        setEvents(prev => prev.map(ev => 
-          ev.id === id ? { ...ev, img: returnedUrl } : ev
-        ));
+        // 3. Is it a merch product?
+        const isProductBack = id.endsWith('_back');
+        const targetProdId = isProductBack ? id.replace('_back', '') : id;
+        if (merch.some(m => m.id === targetProdId)) {
+          const newMerch = merch.map(m => {
+            if (m.id === targetProdId) {
+              return isProductBack ? { ...m, imgBack: returnedUrl } : { ...m, img: returnedUrl };
+            }
+            return m;
+          });
+          setMerch(newMerch);
+          await updateSiteContent('siteMerch', JSON.stringify(newMerch));
+          localStorage.setItem('siteMerch', JSON.stringify(newMerch));
+        }
 
-        alert(`${id.toUpperCase()} file successfully uploaded. Remember to click "Save Changes" to publish.`);
+        // 4. Is it a scheduled event?
+        if (events.some(ev => ev.id === id)) {
+          const newEvents = events.map(ev => 
+            ev.id === id ? { ...ev, img: returnedUrl } : ev
+          );
+          setEvents(newEvents);
+          await updateSiteContent('siteEvents', JSON.stringify(newEvents));
+          localStorage.setItem('siteEvents', JSON.stringify(newEvents));
+        }
+
+        alert(`${id.toUpperCase()} file successfully uploaded and synchronized to Supabase.`);
       } else {
         alert(`Error: ${data.error || 'Upload failed'}`);
       }
     } catch (e) {
+      console.error(e);
       alert('Upload failed. Check server connection.');
     } finally {
       setIsSaving(false);
@@ -1268,14 +1313,14 @@ export default function AdminDashboard() {
                 {/* Shop Banner Customizer */}
                 <div className="bg-gray-50/50 p-8 rounded-[2.5rem] border border-gray-100 space-y-6 mt-8">
                   <div>
-                    <h3 className="text-xl font-black italic tracking-tighter uppercase mb-1">Tienda: Personalización de Banner</h3>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Configura la imagen de fondo, título y lema de la tienda virtual</p>
+                    <h3 className="text-xl font-black italic tracking-tighter uppercase mb-1">Shop Banner Customization</h3>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Configure background image, layout, alignment, and title/subtitle for the shop page</p>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Título de la Tienda</label>
+                        <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Shop Title</label>
                         <input
                           type="text"
                           className="w-full bg-white px-5 py-3.5 rounded-xl font-bold text-xs border border-gray-255 focus:ring-2 focus:ring-brand-blue text-black"
@@ -1285,7 +1330,7 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Descripción del Banner</label>
+                        <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Banner Description</label>
                         <textarea
                           rows={3}
                           className="w-full bg-white px-5 py-3.5 rounded-xl font-semibold text-xs border border-gray-255 focus:ring-2 focus:ring-brand-blue text-black leading-relaxed"
@@ -1298,19 +1343,32 @@ export default function AdminDashboard() {
 
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">URL del Banner de Fondo (Imagen)</label>
-                        <input
-                          type="text"
-                          className="w-full bg-white px-5 py-3.5 rounded-xl font-mono text-[10px] border border-gray-255 focus:ring-2 focus:ring-brand-blue text-black"
-                          value={content.shopBanner || ''}
-                          onChange={(e) => setContent(prev => ({ ...prev, shopBanner: e.target.value }))}
-                          placeholder="/shop_banner.png"
-                        />
+                        <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Background Banner Image (URL or Upload)</label>
+                        <div className="flex gap-3">
+                          <input
+                            type="text"
+                            className="flex-1 bg-white px-5 py-3.5 rounded-xl font-mono text-[10px] border border-gray-255 focus:ring-2 focus:ring-brand-blue text-black"
+                            value={content.shopBanner || ''}
+                            onChange={(e) => setContent(prev => ({ ...prev, shopBanner: e.target.value }))}
+                            placeholder="/shop_banner.png"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById('image-upload') as any;
+                              input.dataset.currentId = 'shopBanner';
+                              input.click();
+                            }}
+                            className="bg-brand-blue hover:bg-black text-white px-5 py-3.5 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 shrink-0 shadow-lg shadow-brand-blue/15"
+                          >
+                            <Upload size={14} /> Upload
+                          </button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Color del Título</label>
+                          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Title Color</label>
                           <div className="flex gap-2">
                             <input
                               type="color"
@@ -1328,7 +1386,7 @@ export default function AdminDashboard() {
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Color del Lema</label>
+                          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Subtitle Color</label>
                           <div className="flex gap-2">
                             <input
                               type="color"
@@ -1348,6 +1406,309 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
+                  {/* Sizing Fit & Alignment Position Controls */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4 border-t border-gray-150 text-black">
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Layout Mode</label>
+                      <select 
+                        className="w-full bg-white border border-gray-200 px-5 py-3.5 rounded-xl font-bold text-xs focus:ring-2 focus:ring-brand-blue text-black shadow-sm uppercase tracking-wider pr-8"
+                        value={content.shopBannerLayout || 'full'}
+                        onChange={(e) => setContent(prev => ({ ...prev, shopBannerLayout: e.target.value }))}
+                      >
+                        <option value="split">Split Screen</option>
+                        <option value="full">Full Overlay</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Text Placement / Alignment</label>
+                      <select 
+                        className="w-full bg-white border border-gray-200 px-5 py-3.5 rounded-xl font-bold text-xs focus:ring-2 focus:ring-brand-blue text-black shadow-sm uppercase tracking-wider pr-8"
+                        value={content.shopBannerPlacement || 'center'}
+                        onChange={(e) => setContent(prev => ({ ...prev, shopBannerPlacement: e.target.value }))}
+                      >
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Click Hyperlink Redirect URL</label>
+                      <input 
+                        type="text"
+                        className="w-full bg-white border border-gray-200 px-5 py-3.5 rounded-xl font-bold text-xs focus:ring-2 focus:ring-brand-blue text-black shadow-sm"
+                        placeholder="https://example.com"
+                        value={content.shopBannerLink || ''}
+                        onChange={(e) => setContent(prev => ({ ...prev, shopBannerLink: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Fit Layout</label>
+                      <select 
+                        className="w-full bg-white border border-gray-200 px-5 py-3.5 rounded-xl font-bold text-xs focus:ring-2 focus:ring-brand-blue text-black shadow-sm uppercase tracking-wider pr-8"
+                        value={content.shopBannerSize || 'fill'}
+                        onChange={(e) => setContent(prev => ({ ...prev, shopBannerSize: e.target.value }))}
+                      >
+                        <option value="fill">Fill (Cover)</option>
+                        <option value="fit">Fit (Contain)</option>
+                        <option value="stretch">Stretch</option>
+                        <option value="tile">Tile</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Alignment / Position</label>
+                      <select 
+                        className="w-full bg-white border border-gray-200 px-5 py-3.5 rounded-xl font-bold text-xs focus:ring-2 focus:ring-brand-blue text-black shadow-sm uppercase tracking-wider pr-8"
+                        value={content.shopBannerPosition || 'center'}
+                        onChange={(e) => setContent(prev => ({ ...prev, shopBannerPosition: e.target.value }))}
+                      >
+                        <option value="center">Center</option>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Fit</label>
+                            <select 
+                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                              value={content.donateBannerSize || 'fill'}
+                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerSize: e.target.value }))}
+                            >
+                              <option value="fill">Fill</option>
+                              <option value="centered">Centered</option>
+                              <option value="stretch">Stretch</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Alignment / Position</label>
+                            <select 
+                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                              value={content.donateBannerPosition || 'center'}
+                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerPosition: e.target.value }))}
+                            >
+                              <option value="center">Center</option>
+                              <option value="top">Top</option>
+                              <option value="bottom">Bottom</option>
+                              <option value="left">Left</option>
+                              <option value="right">Right</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-150">
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Layout Mode</label>
+                            <select 
+                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                              value={content.donateBannerLayout || 'full'}
+                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerLayout: e.target.value }))}
+                            >
+                              <option value="split">Split Screen</option>
+                              <option value="full">Full Overlay</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Text Placement / Alignment</label>
+                            <select 
+                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                              value={content.donateBannerPlacement || 'center'}
+                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerPlacement: e.target.value }))}
+                            >
+                              <option value="left">Left</option>
+                              <option value="center">Center</option>
+                              <option value="right">Right</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2 sm:col-span-2">
+                            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Click Hyperlink Redirect URL</label>
+                            <input 
+                              type="text"
+                              className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                              placeholder="https://example.com"
+                              value={content.donateBannerLink || ''}
+                              onChange={(e) => setContent(prev => ({ ...prev, donateBannerLink: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+
+                  {/* Live Interactive Preview for Shop Banner */}
+                  {`{(() => {
+                    const previewImg = content.shopBanner || '/shop_banner.png';
+                    const isSplit = (content.shopBannerLayout || 'full') === 'split';
+                    const isCenter = content.shopBannerPlacement === 'center';
+                    const isRight = content.shopBannerPlacement === 'right';
+                    
+                    return (
+                      <div className="space-y-3 pt-6 border-t border-gray-150 text-black">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-brand-blue block">Live Interactive Preview</span>
+                            <p className="text-[9px] text-gray-500 font-medium">Select a device view to simulate how the banner adapts to different screen sizes.</p>
+                          </div>
+                          
+                          {/* Device View Selector */}
+                          <div className="flex items-center bg-gray-150 p-0.5 rounded-xl border border-gray-200 shadow-sm w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('desktop')}
+                              className={\`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'desktop' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }\`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                              Desktop
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('tablet')}
+                              className={\`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'tablet' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }\`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              Tablet
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('mobile')}
+                              className={\`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'mobile' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }\`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              Phone
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Simulated Viewport Screen */}
+                        <div className="bg-gray-50 border border-gray-150 rounded-2xl p-4 flex items-center justify-center overflow-hidden min-h-[200px]">
+                          <div 
+                            className="bg-black rounded-xl border border-gray-800 shadow-2xl relative overflow-hidden transition-all duration-300 flex select-none"
+                            style={{
+                              width: 
+                                previewDevice === 'desktop' ? '100%' :
+                                previewDevice === 'tablet' ? '380px' : '220px',
+                              height: 
+                                previewDevice === 'desktop' ? '120px' :
+                                previewDevice === 'tablet' ? '140px' : '160px',
+                              flexDirection: 
+                                isSplit
+                                  ? (previewDevice === 'desktop' ? 'row' : 'column-reverse')
+                                  : 'column'
+                            }}
+                          >
+                            {isSplit ? (
+                              <>
+                                {/* Text Side */}
+                                <div 
+                                  className="bg-[#000000] p-4 flex flex-col justify-center relative z-10 overflow-hidden"
+                                  style={{
+                                    width: previewDevice === 'desktop' ? '50%' : '100%',
+                                    height: previewDevice === 'desktop' ? '100%' : '50%',
+                                    textAlign: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'right' : 'left',
+                                    alignItems: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <span className="text-[5px] uppercase tracking-widest mb-0.5 font-bold" style={{ color: content.shopSubtitleColor || '#E5E7EB' }}>Official Shop</span>
+                                  <h1 
+                                    className="italic font-black mb-0.5 whitespace-pre-line leading-none tracking-tight"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: content.shopTitleColor || '#FFFFFF',
+                                    }}
+                                  >
+                                    {content.shopTitle || '5XFOUNDATION MERCH'}
+                                  </h1>
+                                  <p 
+                                    className="leading-relaxed opacity-95 line-clamp-1"
+                                    style={{
+                                      fontSize: '6px',
+                                      color: content.shopSubtitleColor || '#E5E7EB',
+                                    }}
+                                  >
+                                    {content.shopSubtitle}
+                                  </p>
+                                </div>
+
+                                {/* Image Side */}
+                                <div 
+                                  className="relative bg-zinc-900 flex-1 overflow-hidden"
+                                  style={{
+                                    width: previewDevice === 'desktop' ? '50%' : '100%',
+                                    height: previewDevice === 'desktop' ? '100%' : '50%',
+                                    backgroundImage: \`url(${previewImg})\`,
+                                    backgroundSize: 
+                                      content.shopBannerSize === 'fit' || content.shopBannerSize === 'contain' ? 'contain' :
+                                      content.shopBannerSize === 'stretch' ? '100% 100%' : 'cover',
+                                    backgroundPosition: content.shopBannerPosition || 'center',
+                                    backgroundRepeat: 'no-repeat'
+                                  }}
+                                />
+                              </>
+                            ) : (
+                              <>
+                                {/* Full Overlay Layout */}
+                                <div 
+                                  className="absolute inset-0 bg-zinc-900"
+                                  style={{
+                                    backgroundImage: \`url(${previewImg})\`,
+                                    backgroundSize: 
+                                      content.shopBannerSize === 'fit' || content.shopBannerSize === 'contain' ? 'contain' :
+                                      content.shopBannerSize === 'stretch' ? '100% 100%' : 'cover',
+                                    backgroundPosition: content.shopBannerPosition || 'center',
+                                    backgroundRepeat: 'no-repeat'
+                                  }}
+                                />
+                                {/* Overlay shadow */}
+                                <div 
+                                  className="absolute inset-0 z-10 bg-black"
+                                  style={{ opacity: parseFloat(content.shopBannerOverlay || '0.4') }}
+                                />
+                                {/* Text Content */}
+                                <div 
+                                  className="absolute inset-0 p-4 flex flex-col justify-center z-20 overflow-hidden"
+                                  style={{
+                                    textAlign: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'right' : 'left',
+                                    alignItems: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <span className="text-[5px] uppercase tracking-widest mb-0.5 font-bold" style={{ color: content.shopSubtitleColor || '#E5E7EB' }}>Official Shop</span>
+                                  <h1 
+                                    className="italic font-black mb-0.5 whitespace-pre-line leading-none tracking-tight"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: content.shopTitleColor || '#FFFFFF',
+                                    }}
+                                  >
+                                    {content.shopTitle || '5XFOUNDATION MERCH'}
+                                  </h1>
+                                  <p 
+                                    className="leading-relaxed opacity-95 line-clamp-1 max-w-[80%]"
+                                    style={{
+                                      fontSize: '6px',
+                                      color: content.shopSubtitleColor || '#E5E7EB',
+                                    }}
+                                  >
+                                    {content.shopSubtitle}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}`}
+                  
                   <div className="flex flex-col sm:flex-row justify-between items-center bg-white border border-gray-150 rounded-2xl p-4 gap-4">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
                       Asegúrate de pulsar "Guardar Cambios" en la barra superior para publicar las actualizaciones del banner.
@@ -1380,6 +1741,392 @@ export default function AdminDashboard() {
                     <Plus size={14} /> Schedule Event
                   </button>
                 </div>
+
+                {/* Events Banner Customizer */}
+                <div className="bg-white border border-gray-150 p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden text-black space-y-8">
+                  <div>
+                    <span className="text-[10px] font-black tracking-widest uppercase text-brand-blue block mb-1">Events Header</span>
+                    <h3 className="text-2xl font-black italic uppercase tracking-tighter">Header Layout (Banner)</h3>
+                    <p className="text-xs text-gray-500 font-medium">Customize the background banner, title, subtitle, and layout style of the events page at `/events`</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                     {/* Column 1: Background Banner Configuration */}
+                     <div className="space-y-6">
+                       <h4 className="text-sm font-black uppercase tracking-wider text-gray-400">1. Background Banner</h4>
+                       <div className="space-y-4">
+                         <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Image (URL or Upload)</label>
+                         <div className="flex gap-4">
+                           <input 
+                             type="text"
+                             className="flex-1 bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                             placeholder="Banner image URL (e.g. /shop_banner.png)"
+                             value={content.eventBanner || ''}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBanner: e.target.value }))}
+                           />
+                           <button 
+                             type="button"
+                             onClick={() => {
+                               const input = document.getElementById('image-upload') as any;
+                               input.dataset.currentId = 'eventBanner';
+                               input.click();
+                             }}
+                             className="bg-black text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-blue transition-all"
+                           >
+                             Upload Image
+                           </button>
+                         </div>
+                       </div>
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Height (px)</label>
+                           <input 
+                             type="number"
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                             placeholder="350"
+                             value={content.eventBannerHeight || ''}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerHeight: e.target.value }))}
+                           />
+                         </div>
+                         <div className="space-y-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Dark Overlay Opacity (0 to 1)</label>
+                           <input 
+                             type="number"
+                             step="0.1"
+                             min="0"
+                             max="1"
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                             placeholder="0.4"
+                             value={content.eventBannerOverlay || ''}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerOverlay: e.target.value }))}
+                           />
+                         </div>
+                       </div>
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                         <div className="space-y-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Fit</label>
+                           <select 
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                             value={content.eventBannerSize || 'cover'}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerSize: e.target.value }))}
+                           >
+                             <option value="cover">Fill (Cover)</option>
+                             <option value="centered">Fit (Contain)</option>
+                             <option value="stretch">Stretch</option>
+                           </select>
+                         </div>
+                         <div className="space-y-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Alignment / Position</label>
+                           <select 
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                             value={content.eventBannerPosition || 'center'}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerPosition: e.target.value }))}
+                           >
+                             <option value="center">Center</option>
+                             <option value="top">Top</option>
+                             <option value="bottom">Bottom</option>
+                             <option value="left">Left</option>
+                             <option value="right">Right</option>
+                           </select>
+                         </div>
+                       </div>
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-150">
+                         <div className="space-y-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Banner Layout Mode</label>
+                           <select 
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                             value={content.eventBannerLayout || 'full'}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerLayout: e.target.value }))}
+                           >
+                             <option value="split">Split Screen</option>
+                             <option value="full">Full Overlay</option>
+                           </select>
+                         </div>
+                         <div className="space-y-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Text Placement / Alignment</label>
+                           <select 
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black pr-8"
+                             value={content.eventBannerPlacement || 'center'}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerPlacement: e.target.value }))}
+                           >
+                             <option value="left">Left</option>
+                             <option value="center">Center</option>
+                             <option value="right">Right</option>
+                           </select>
+                         </div>
+                         <div className="space-y-2 sm:col-span-2">
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue">Click Hyperlink Redirect URL</label>
+                           <input 
+                             type="text"
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                             placeholder="https://example.com"
+                             value={content.eventBannerLink || ''}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventBannerLink: e.target.value }))}
+                           />
+                         </div>
+                       </div>
+
+                       <p className="text-[10px] text-gray-400 font-medium">Use "none" or leave the URL empty if you prefer a minimalist layout without a background banner image.</p>
+                     </div>
+
+                     {/* Column 2: Title Configuration */}
+                     <div className="space-y-6">
+                       <h4 className="text-sm font-black uppercase tracking-wider text-gray-400">2. Title Customization</h4>
+                       <div className="space-y-4">
+                         <div>
+                           <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Title Text</label>
+                           <input 
+                             type="text"
+                             className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-bold text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                             placeholder="UPCOMING 5X EVENTS"
+                             value={content.eventTitle || ''}
+                             onChange={(e) => setContent(prev => ({ ...prev, eventTitle: e.target.value }))}
+                           />
+                         </div>
+
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                           <div>
+                             <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Title Color</label>
+                             <div className="flex gap-2">
+                               <input 
+                                 type="color"
+                                 className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer overflow-hidden p-0 bg-transparent animate-none"
+                                 value={content.eventBannerTitleColor || '#FFFFFF'}
+                                 onChange={(e) => setContent(prev => ({ ...prev, eventBannerTitleColor: e.target.value }))}
+                               />
+                               <input 
+                                 type="text"
+                                 className="flex-1 bg-gray-50 px-4 py-3 rounded-2xl font-mono text-[10px] font-bold border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                                 value={content.eventBannerTitleColor || ''}
+                                 placeholder="#FFFFFF"
+                                 onChange={(e) => setContent(prev => ({ ...prev, eventBannerTitleColor: e.target.value }))}
+                               />
+                             </div>
+                           </div>
+                           <div>
+                             <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Subtitle Color</label>
+                             <div className="flex gap-2">
+                               <input 
+                                 type="color"
+                                 className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer overflow-hidden p-0 bg-transparent animate-none"
+                                 value={content.eventBannerSubtitleColor || '#E5E7EB'}
+                                 onChange={(e) => setContent(prev => ({ ...prev, eventBannerSubtitleColor: e.target.value }))}
+                               />
+                               <input 
+                                 type="text"
+                                 className="flex-1 bg-gray-50 px-4 py-3 rounded-2xl font-mono text-[10px] font-bold border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                                 value={content.eventBannerSubtitleColor || ''}
+                                 placeholder="#E5E7EB"
+                                 onChange={(e) => setContent(prev => ({ ...prev, eventBannerSubtitleColor: e.target.value }))}
+                               />
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                     </div>
+                  </div>
+
+                  {/* Bottom Row: Subtitle Config */}
+                  <div className="border-t border-gray-150 pt-8 space-y-6">
+                    <h4 className="text-sm font-black uppercase tracking-wider text-gray-400">3. Subtitle Customization</h4>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-brand-blue mb-2">Subtitle Text / Support Tagline</label>
+                          <textarea
+                            rows={3}
+                            className="w-full bg-gray-50 px-6 py-4 rounded-2xl font-medium text-xs border border-gray-200 focus:ring-2 focus:ring-brand-blue text-black"
+                            placeholder="Join us as we build a stronger network..."
+                            value={content.eventSubtitle || ''}
+                            onChange={(e) => setContent(prev => ({ ...prev, eventSubtitle: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Interactive Preview for Events Banner */}
+                  {(() => {
+                    const previewImg = content.eventBanner || '/shop_banner.png';
+                    const isSplit = (content.eventBannerLayout || 'full') === 'split';
+                    const isCenter = content.eventBannerPlacement === 'center';
+                    const isRight = content.eventBannerPlacement === 'right';
+                    
+                    return (
+                      <div className="space-y-3 pt-6 border-t border-gray-150 text-black">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-brand-blue block mb-1">Live Interactive Preview</span>
+                            <p className="text-[9px] text-gray-500 font-medium">Select a device view to simulate how the banner adapts to different screen sizes.</p>
+                          </div>
+                          
+                          {/* Device View Selector */}
+                          <div className="flex items-center bg-gray-150 p-0.5 rounded-xl border border-gray-200 shadow-sm w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('desktop')}
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'desktop' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                              Desktop
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('tablet')}
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'tablet' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              Tablet
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('mobile')}
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'mobile' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              Phone
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Simulated Viewport Screen */}
+                        <div className="bg-gray-50 border border-gray-150 rounded-2xl p-4 flex items-center justify-center overflow-hidden min-h-[200px]">
+                          <div 
+                            className="bg-black rounded-xl border border-gray-800 shadow-2xl relative overflow-hidden transition-all duration-300 flex select-none"
+                            style={{
+                              width: 
+                                previewDevice === 'desktop' ? '100%' :
+                                previewDevice === 'tablet' ? '380px' : '220px',
+                              height: 
+                                previewDevice === 'desktop' ? '120px' :
+                                previewDevice === 'tablet' ? '140px' : '160px',
+                              flexDirection: 
+                                isSplit
+                                  ? (previewDevice === 'desktop' ? 'row' : 'column-reverse')
+                                  : 'column'
+                            }}
+                          >
+                            {isSplit ? (
+                              <>
+                                {/* Text Side */}
+                                <div 
+                                  className="bg-[#000000] p-4 flex flex-col justify-center relative z-10 overflow-hidden"
+                                  style={{
+                                    width: previewDevice === 'desktop' ? '50%' : '100%',
+                                    height: previewDevice === 'desktop' ? '100%' : '50%',
+                                    textAlign: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'right' : 'left',
+                                    alignItems: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <span className="text-[5px] uppercase tracking-widest mb-0.5 font-bold" style={{ color: content.eventBannerSubtitleColor || '#E5E7EB' }}>Community Events</span>
+                                  <h1 
+                                    className="italic font-black mb-0.5 whitespace-pre-line leading-none tracking-tight"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: content.eventBannerTitleColor || '#FFFFFF',
+                                    }}
+                                  >
+                                    {content.eventTitle || 'UPCOMING 5X EVENTS'}
+                                  </h1>
+                                  <p 
+                                    className="leading-relaxed opacity-95 line-clamp-1"
+                                    style={{
+                                      fontSize: '6px',
+                                      color: content.eventBannerSubtitleColor || '#E5E7EB',
+                                    }}
+                                  >
+                                    {content.eventSubtitle}
+                                  </p>
+                                </div>
+
+                                {/* Image Side */}
+                                <div 
+                                  className="relative bg-zinc-900 flex-1 overflow-hidden"
+                                  style={{
+                                    width: previewDevice === 'desktop' ? '50%' : '100%',
+                                    height: previewDevice === 'desktop' ? '100%' : '50%',
+                                    backgroundImage: `url(${previewImg})`,
+                                    backgroundSize: 
+                                      content.eventBannerSize === 'centered' ? 'contain' :
+                                      content.eventBannerSize === 'stretch' ? '100% 100%' : 'cover',
+                                    backgroundPosition: content.eventBannerPosition || 'center',
+                                    backgroundRepeat: 'no-repeat'
+                                  }}
+                                />
+                              </>
+                            ) : (
+                              <>
+                                {/* Full Overlay Layout */}
+                                <div 
+                                  className="absolute inset-0 bg-zinc-900"
+                                  style={{
+                                    backgroundImage: `url(${previewImg})`,
+                                    backgroundSize: 
+                                      content.eventBannerSize === 'centered' ? 'contain' :
+                                      content.eventBannerSize === 'stretch' ? '100% 100%' : 'cover',
+                                    backgroundPosition: content.eventBannerPosition || 'center',
+                                    backgroundRepeat: 'no-repeat'
+                                  }}
+                                />
+                                {/* Overlay shadow */}
+                                <div 
+                                  className="absolute inset-0 z-10 bg-black"
+                                  style={{ opacity: parseFloat(content.eventBannerOverlay || '0.4') }}
+                                />
+                                {/* Text Content */}
+                                <div 
+                                  className="absolute inset-0 p-4 flex flex-col justify-center z-20 overflow-hidden"
+                                  style={{
+                                    textAlign: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'right' : 'left',
+                                    alignItems: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <span className="text-[5px] uppercase tracking-widest mb-0.5 font-bold" style={{ color: content.eventBannerSubtitleColor || '#E5E7EB' }}>Community Events</span>
+                                  <h1 
+                                    className="italic font-black mb-0.5 whitespace-pre-line leading-none tracking-tight"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: content.eventBannerTitleColor || '#FFFFFF',
+                                    }}
+                                  >
+                                    {content.eventTitle || 'UPCOMING 5X EVENTS'}
+                                  </h1>
+                                  <p 
+                                    className="leading-relaxed opacity-95 line-clamp-1 max-w-[80%]"
+                                    style={{
+                                      fontSize: '6px',
+                                      color: content.eventBannerSubtitleColor || '#E5E7EB',
+                                    }}
+                                  >
+                                    {content.eventSubtitle}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 <div className="space-y-6">
                   {events.map((event, idx) => (
                     <div key={event.id} className="p-8 bg-gray-50 border border-gray-100 rounded-[2.5rem] flex flex-col lg:flex-row gap-10 items-center group relative">
@@ -3088,6 +3835,184 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Live Interactive Preview for Donate Banner */}
+                  {(() => {
+                    const previewImg = content.donateBanner || '/shop_banner.png';
+                    const isSplit = (content.donateBannerLayout || 'full') === 'split';
+                    const isCenter = content.donateBannerPlacement === 'center';
+                    const isRight = content.donateBannerPlacement === 'right';
+                    
+                    return (
+                      <div className="space-y-3 pt-6 border-t border-gray-150 text-black">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-brand-blue block mb-1">Live Interactive Preview</span>
+                            <p className="text-[9px] text-gray-500 font-medium">Select a device view to simulate how the banner adapts to different screen sizes.</p>
+                          </div>
+                          
+                          {/* Device View Selector */}
+                          <div className="flex items-center bg-gray-150 p-0.5 rounded-xl border border-gray-200 shadow-sm w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('desktop')}
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'desktop' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                              Desktop
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('tablet')}
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'tablet' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              Tablet
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDevice('mobile')}
+                              className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                previewDevice === 'mobile' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                              Phone
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Simulated Viewport Screen */}
+                        <div className="bg-gray-50 border border-gray-150 rounded-2xl p-4 flex items-center justify-center overflow-hidden min-h-[200px]">
+                          <div 
+                            className="bg-black rounded-xl border border-gray-800 shadow-2xl relative overflow-hidden transition-all duration-300 flex select-none"
+                            style={{
+                              width: 
+                                previewDevice === 'desktop' ? '100%' :
+                                previewDevice === 'tablet' ? '380px' : '220px',
+                              height: 
+                                previewDevice === 'desktop' ? '120px' :
+                                previewDevice === 'tablet' ? '140px' : '160px',
+                              flexDirection: 
+                                isSplit
+                                  ? (previewDevice === 'desktop' ? 'row' : 'column-reverse')
+                                  : 'column'
+                            }}
+                          >
+                            {isSplit ? (
+                              <>
+                                {/* Text Side */}
+                                <div 
+                                  className="bg-[#000000] p-4 flex flex-col justify-center relative z-10 overflow-hidden"
+                                  style={{
+                                    width: previewDevice === 'desktop' ? '50%' : '100%',
+                                    height: previewDevice === 'desktop' ? '100%' : '50%',
+                                    textAlign: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'right' : 'left',
+                                    alignItems: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <span className="text-[5px] uppercase tracking-widest mb-0.5 font-bold" style={{ color: content.donateSubtitleColor || '#E5E7EB' }}>FUEL THE FIGHT</span>
+                                  <h1 
+                                    className="italic font-black mb-0.5 whitespace-pre-line leading-none tracking-tight"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: content.donateTitleColor || '#FFFFFF',
+                                    }}
+                                  >
+                                    {content.donateTitle || 'FUEL THE FIGHT'}
+                                  </h1>
+                                  <p 
+                                    className="leading-relaxed opacity-95 line-clamp-1"
+                                    style={{
+                                      fontSize: '6px',
+                                      color: content.donateSubtitleColor || '#E5E7EB',
+                                    }}
+                                  >
+                                    {content.donateSubtitle}
+                                  </p>
+                                </div>
+
+                                {/* Image Side */}
+                                <div 
+                                  className="relative bg-zinc-900 flex-1 overflow-hidden"
+                                  style={{
+                                    width: previewDevice === 'desktop' ? '50%' : '100%',
+                                    height: previewDevice === 'desktop' ? '100%' : '50%',
+                                    backgroundImage: `url(${previewImg})`,
+                                    backgroundSize: 
+                                      content.donateBannerSize === 'centered' ? 'contain' :
+                                      content.donateBannerSize === 'stretch' ? '100% 100%' : 'cover',
+                                    backgroundPosition: content.donateBannerPosition || 'center',
+                                    backgroundRepeat: 'no-repeat'
+                                  }}
+                                />
+                              </>
+                            ) : (
+                              <>
+                                {/* Full Overlay Layout */}
+                                <div 
+                                  className="absolute inset-0 bg-zinc-900"
+                                  style={{
+                                    backgroundImage: `url(${previewImg})`,
+                                    backgroundSize: 
+                                      content.donateBannerSize === 'centered' ? 'contain' :
+                                      content.donateBannerSize === 'stretch' ? '100% 100%' : 'cover',
+                                    backgroundPosition: content.donateBannerPosition || 'center',
+                                    backgroundRepeat: 'no-repeat'
+                                  }}
+                                />
+                                {/* Overlay shadow */}
+                                <div 
+                                  className="absolute inset-0 z-10 bg-black"
+                                  style={{ opacity: parseFloat(content.donateBannerOverlay || '0.4') }}
+                                />
+                                {/* Text Content */}
+                                <div 
+                                  className="absolute inset-0 p-4 flex flex-col justify-center z-20 overflow-hidden"
+                                  style={{
+                                    textAlign: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'right' : 'left',
+                                    alignItems: 
+                                      previewDevice === 'mobile' ? 'center' :
+                                      isCenter ? 'center' : isRight ? 'flex-end' : 'flex-start'
+                                  }}
+                                >
+                                  <span className="text-[5px] uppercase tracking-widest mb-0.5 font-bold" style={{ color: content.donateSubtitleColor || '#E5E7EB' }}>FUEL THE FIGHT</span>
+                                  <h1 
+                                    className="italic font-black mb-0.5 whitespace-pre-line leading-none tracking-tight"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: content.donateTitleColor || '#FFFFFF',
+                                    }}
+                                  >
+                                    {content.donateTitle || 'FUEL THE FIGHT'}
+                                  </h1>
+                                  <p 
+                                    className="leading-relaxed opacity-95 line-clamp-1 max-w-[80%]"
+                                    style={{
+                                      fontSize: '6px',
+                                      color: content.donateSubtitleColor || '#E5E7EB',
+                                    }}
+                                  >
+                                    {content.donateSubtitle}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Make a Difference Today Section */}
@@ -3769,13 +4694,26 @@ export default function AdminDashboard() {
                                     {slot.suggestedDems.d}
                                   </span>
                                 </div>
-                                <input
-                                  type="text"
-                                  placeholder="https://.../banner_desktop.png"
-                                  className="w-full bg-white border-2 border-gray-100 focus:border-brand-blue px-5 py-4 rounded-xl font-bold text-xs focus:ring-0 text-black shadow-sm"
-                                  value={(content as any)[slot.desktopKey] || ""}
-                                  onChange={(e) => setContent(prev => ({ ...prev, [slot.desktopKey]: e.target.value }))}
-                                />
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="https://.../banner_desktop.png"
+                                    className="flex-1 bg-white border border-gray-200 px-5 py-4 rounded-xl font-bold text-xs text-black shadow-sm"
+                                    value={(content as any)[slot.desktopKey] || ""}
+                                    onChange={(e) => setContent(prev => ({ ...prev, [slot.desktopKey]: e.target.value }))}
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const input = document.getElementById('image-upload') as any;
+                                      input.dataset.currentId = slot.desktopKey;
+                                      input.click();
+                                    }}
+                                    className="bg-brand-blue hover:bg-black text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <Upload size={12} /> Upload
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Tablet */}
@@ -3786,13 +4724,26 @@ export default function AdminDashboard() {
                                     {slot.suggestedDems.t}
                                   </span>
                                 </div>
-                                <input
-                                  type="text"
-                                  placeholder="https://.../banner_tablet.png"
-                                  className="w-full bg-white border-2 border-gray-100 focus:border-brand-blue px-5 py-4 rounded-xl font-bold text-xs focus:ring-0 text-black shadow-sm"
-                                  value={(content as any)[slot.tabletKey] || ""}
-                                  onChange={(e) => setContent(prev => ({ ...prev, [slot.tabletKey]: e.target.value }))}
-                                />
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="https://.../banner_tablet.png"
+                                    className="flex-1 bg-white border border-gray-200 px-5 py-4 rounded-xl font-bold text-xs text-black shadow-sm"
+                                    value={(content as any)[slot.tabletKey] || ""}
+                                    onChange={(e) => setContent(prev => ({ ...prev, [slot.tabletKey]: e.target.value }))}
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const input = document.getElementById('image-upload') as any;
+                                      input.dataset.currentId = slot.tabletKey;
+                                      input.click();
+                                    }}
+                                    className="bg-brand-blue hover:bg-black text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <Upload size={12} /> Upload
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Mobile */}
@@ -3803,13 +4754,26 @@ export default function AdminDashboard() {
                                     {slot.suggestedDems.m}
                                   </span>
                                 </div>
-                                <input
-                                  type="text"
-                                  placeholder="https://.../banner_mobile.png"
-                                  className="w-full bg-white border-2 border-gray-100 focus:border-brand-blue px-5 py-4 rounded-xl font-bold text-xs focus:ring-0 text-black shadow-sm"
-                                  value={(content as any)[slot.mobileKey] || ""}
-                                  onChange={(e) => setContent(prev => ({ ...prev, [slot.mobileKey]: e.target.value }))}
-                                />
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="https://.../banner_mobile.png"
+                                    className="flex-1 bg-white border border-gray-200 px-5 py-4 rounded-xl font-bold text-xs text-black shadow-sm"
+                                    value={(content as any)[slot.mobileKey] || ""}
+                                    onChange={(e) => setContent(prev => ({ ...prev, [slot.mobileKey]: e.target.value }))}
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const input = document.getElementById('image-upload') as any;
+                                      input.dataset.currentId = slot.mobileKey;
+                                      input.click();
+                                    }}
+                                    className="bg-brand-blue hover:bg-black text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 flex items-center gap-1.5 shadow-sm"
+                                  >
+                                    <Upload size={12} /> Upload
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Redirect Link (Takes whole span) */}
@@ -3818,12 +4782,12 @@ export default function AdminDashboard() {
                                 <input
                                   type="text"
                                   placeholder="https://shop.5xfoundation.org/special-offer"
-                                  className="w-full bg-white border-2 border-gray-100 focus:border-brand-blue px-5 py-4 rounded-xl font-bold text-xs focus:ring-0 text-black shadow-sm"
+                                  className="w-full bg-white border border-gray-200 px-5 py-4 rounded-xl font-bold text-xs text-black shadow-sm"
                                   value={(content as any)[slot.linkKey] || ""}
                                   onChange={(e) => setContent(prev => ({ ...prev, [slot.linkKey]: e.target.value }))}
                                 />
                               </div>
-
+                              
                               {/* Asset Size & Alignment */}
                               <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-150">
                                 <div className="space-y-2">

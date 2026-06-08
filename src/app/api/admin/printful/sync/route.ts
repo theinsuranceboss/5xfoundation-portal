@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, batchUploadStorage, uploadDbToSupabase, ensureDb } from '@/lib/db';
 import { fetchSyncProducts, fetchProductDetails } from '@/lib/printful';
 
 // Color hex helper for Printful imports
@@ -30,151 +30,156 @@ const getColorHex = (colorName: string): string => {
 
 export async function POST() {
   try {
-    const products = await fetchSyncProducts();
+    // 1. Force ensure the database file is locally downloaded/updated
+    await ensureDb();
 
-    let successCount = 0;
- 
-     for (const p of products) {
-       const details = await fetchProductDetails(p.id);
-       
-       const title = details.sync_product.name;
-       const images: { url: string, type: string }[] = [];
-       const variants: any[] = [];
-       let basePrice = 0.01;
- 
-       // Determine category based on first variant main_category_id
-       const firstVariant = details.sync_variants[0] || {};
-       const categoryIdVal = firstVariant.main_category_id;
-       
-       let catName = 'Apparel';
-       let catSlug = 'apparel';
-       
-       if (categoryIdVal === 41) {
-         catName = 'Hats';
-         catSlug = 'hats';
-       } else if (categoryIdVal === 30 || categoryIdVal === 23) {
-         catName = 'Tank Tops';
-         catSlug = 'tanks';
-       } else if (categoryIdVal === 12) {
-         catName = 'Kids';
-         catSlug = 'kids';
-       } else if (categoryIdVal === 28) {
-         catName = 'Hoodies';
-         catSlug = 'hoodies';
-       } else if (categoryIdVal === 6 || categoryIdVal === 24) {
-         catName = 'T-Shirts';
-         catSlug = 't-shirts';
-       }
-       
-       let productCategory = await db.category.findUnique({ where: { slug: catSlug } });
-       if (!productCategory) {
-         productCategory = await db.category.create({
-           data: {
-             name: catName,
-             slug: catSlug,
-             order: catSlug === 't-shirts' ? 1 : catSlug === 'hoodies' ? 2 : catSlug === 'tanks' ? 3 : catSlug === 'hats' ? 4 : 5
-           }
-         });
-       }
- 
-       // Extract variants and images
-       details.sync_variants.forEach((v: any) => {
-         // Find price
-         const price = parseFloat(v.retail_price);
-         if (!isNaN(price) && price > 0) basePrice = price;
- 
-         // Use direct color and size fields from Printful
-         const color = (v.color || 'Default').trim();
-         const size = (v.size || 'One Size').trim();
- 
-         // Format color field with hex name (colorName|hexValue)
-         const formattedColor = `${color}|${getColorHex(color)}`;
- 
-         variants.push({
-           color: formattedColor,
-           size,
-           sku: v.sku,
-           stock: 999 // Printful is made-to-order
-         });
- 
-         // Extract mockups and back designs
-         v.files.forEach((f: any) => {
-           if ((f.type === 'preview' || f.type === 'mockup' || f.type === 'back') && f.preview_url) {
-             const urlWithColor = `${f.preview_url}?color=${encodeURIComponent(color)}`;
-             if (!images.find(img => img.url === urlWithColor)) {
-               const type = (f.type === 'back' || f.filename?.toLowerCase().includes('back')) ? 'back' : 'front';
-               images.push({ url: urlWithColor, type });
-             }
-           }
-         });
-       });
- 
-       // Insert or Update DB
-       let existingProduct = await db.product.findFirst({
-         where: {
-           OR: [
-             { syncId: String(p.id) },
-             { syncId: null, title }
-           ]
-         }
-       });
- 
-       if (existingProduct) {
-         // Update product price, title, categoryId & set syncId
-         await db.product.update({
-           where: { id: existingProduct.id },
-           data: { 
-             title,
-             price: basePrice,
-             syncId: String(p.id),
-             categoryId: productCategory.id
-           }
-         });
-         // Clear old variants & images
-         await db.productImage.deleteMany({ where: { productId: existingProduct.id } });
-         await db.productVariant.deleteMany({ where: { productId: existingProduct.id } });
-       } else {
-         // Create new
-         existingProduct = await db.product.create({
-           data: {
-             title,
-             description: 'Automatically imported from Printful.',
-             price: basePrice,
-             syncId: String(p.id),
-             categoryId: productCategory.id
-           }
-         });
-       }
-
-      // Insert fresh images
-      for (let i = 0; i < images.length; i++) {
-        await db.productImage.create({
-          data: {
-            productId: existingProduct.id,
-            url: images[i].url,
-            type: images[i].type,
-            order: i
+    // 2. Perform all syncing writes inside batch context (skips intermediate Supabase uploads)
+    const successCount = await batchUploadStorage.run(true, async () => {
+      const products = await fetchSyncProducts();
+      let count = 0;
+  
+      for (const p of products) {
+        const details = await fetchProductDetails(p.id);
+        
+        const title = details.sync_product.name;
+        const images: { url: string, type: string }[] = [];
+        const variants: any[] = [];
+        let basePrice = 0.01;
+  
+        // Determine category based on first variant main_category_id
+        const firstVariant = details.sync_variants[0] || {};
+        const categoryIdVal = firstVariant.main_category_id;
+        
+        let catName = 'Apparel';
+        let catSlug = 'apparel';
+        
+        if (categoryIdVal === 41) {
+          catName = 'Hats';
+          catSlug = 'hats';
+        } else if (categoryIdVal === 30 || categoryIdVal === 23) {
+          catName = 'Tank Tops';
+          catSlug = 'tanks';
+        } else if (categoryIdVal === 12) {
+          catName = 'Kids';
+          catSlug = 'kids';
+        } else if (categoryIdVal === 28) {
+          catName = 'Hoodies';
+          catSlug = 'hoodies';
+        } else if (categoryIdVal === 6 || categoryIdVal === 24) {
+          catName = 'T-Shirts';
+          catSlug = 't-shirts';
+        }
+        
+        let productCategory = await db.category.findUnique({ where: { slug: catSlug } });
+        if (!productCategory) {
+          productCategory = await db.category.create({
+            data: {
+              name: catName,
+              slug: catSlug,
+              order: catSlug === 't-shirts' ? 1 : catSlug === 'hoodies' ? 2 : catSlug === 'tanks' ? 3 : catSlug === 'hats' ? 4 : 5
+            }
+          });
+        }
+  
+        // Extract variants and images
+        details.sync_variants.forEach((v: any) => {
+          // Find price
+          const price = parseFloat(v.retail_price);
+          if (!isNaN(price) && price > 0) basePrice = price;
+  
+          // Use direct color and size fields from Printful
+          const color = (v.color || 'Default').trim();
+          const size = (v.size || 'One Size').trim();
+  
+          // Format color field with hex name (colorName|hexValue)
+          const formattedColor = `${color}|${getColorHex(color)}`;
+  
+          variants.push({
+            color: formattedColor,
+            size,
+            sku: v.sku,
+            stock: 999 // Printful is made-to-order
+          });
+  
+          // Extract mockups and back designs
+          v.files.forEach((f: any) => {
+            if ((f.type === 'preview' || f.type === 'mockup' || f.type === 'back') && f.preview_url) {
+              const urlWithColor = `${f.preview_url}?color=${encodeURIComponent(color)}`;
+              if (!images.find(img => img.url === urlWithColor)) {
+                const type = (f.type === 'back' || f.filename?.toLowerCase().includes('back')) ? 'back' : 'front';
+                images.push({ url: urlWithColor, type });
+              }
+            }
+          });
+        });
+  
+        // Insert or Update DB
+        let existingProduct = await db.product.findFirst({
+          where: {
+            OR: [
+              { syncId: String(p.id) },
+              { syncId: null, title }
+            ]
           }
         });
-      }
+  
+        if (existingProduct) {
+          // Update product price, title, categoryId & set syncId, but do not touch existing images and variants
+          await db.product.update({
+            where: { id: existingProduct.id },
+            data: { 
+              title,
+              price: basePrice,
+              syncId: String(p.id),
+              categoryId: productCategory.id
+            }
+          });
+        } else {
+          // Create new
+          existingProduct = await db.product.create({
+            data: {
+              title,
+              description: 'Automatically imported from Printful.',
+              price: basePrice,
+              syncId: String(p.id),
+              categoryId: productCategory.id
+            }
+          });
 
-      // Insert fresh variants sequentially without redundant findFirst checks
-      // This completely solves slow SQLite locking/socket timeouts in nested loops
-      for (const variant of variants) {
-        await db.productVariant.create({
-          data: {
-            productId: existingProduct.id,
-            color: variant.color,
-            size: variant.size,
-            sku: variant.sku,
-            stock: variant.stock
+          // Insert fresh images (only for brand new products)
+          for (let i = 0; i < images.length; i++) {
+            await db.productImage.create({
+              data: {
+                productId: existingProduct.id,
+                url: images[i].url,
+                type: images[i].type,
+                order: i
+              }
+            });
           }
-        });
+    
+          // Insert fresh variants sequentially (only for brand new products)
+          for (const variant of variants) {
+            await db.productVariant.create({
+              data: {
+                productId: existingProduct.id,
+                color: variant.color,
+                size: variant.size,
+                sku: variant.sku,
+                stock: variant.stock
+              }
+            });
+          }
+        }
+  
+        count++;
       }
+      return count;
+    });
 
-      successCount++;
-    }
-
+    // 3. Upload the fully updated SQLite database file exactly once back to Supabase
+    await uploadDbToSupabase();
+  
     return NextResponse.json({ success: true, synced: successCount });
   } catch (error: any) {
     console.error('Printful sync error:', error);

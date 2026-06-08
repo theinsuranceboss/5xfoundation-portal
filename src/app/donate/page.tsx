@@ -174,38 +174,122 @@ export default function DonatePage() {
   const bannerImg = content.donateBanner || '/shop_banner.png';
   const hasBanner = bannerImg.trim() !== "" && bannerImg !== "none";
 
-  const headerContent = (
-    <div className="flex flex-col justify-center h-full max-w-4xl mx-auto px-4 text-center">
-      <style dangerouslySetInnerHTML={{ __html: `
-        .responsive-donate-title {
-          font-size: clamp(24px, 5vw, ${content.donateTitleSize || '48'}px) !important;
-        }
-        .responsive-donate-subtitle {
-          font-size: clamp(14px, 2vw, ${content.donateSubtitleSize || '16'}px) !important;
-        }
-      ` }} />
-      <h1 
-        className="tracking-tighter uppercase italic leading-none mb-4 responsive-donate-title"
-        style={{
-          color: content.donateTitleColor || (hasBanner ? '#FFFFFF' : '#000000'),
-          fontFamily: `${content.donateTitleFontFamily || 'Inter'}, sans-serif`,
-          textAlign: (content.donateTitleAlign || 'center') as any,
-          fontWeight: content.donateTitleWeight || '900',
-        }}
+  const isSplit = content.donateBannerLayout === 'split';
+  const textPlacement = content.donateBannerPlacement || 'center'; // left | center | right
+  const bannerHeight = `${content.donateBannerHeight || '350'}px`;
+
+  // Alignment classes for overlay mode
+  const overlayAlignClasses =
+    textPlacement === 'left' ? 'text-left items-start' :
+    textPlacement === 'right' ? 'text-right items-end ml-auto' :
+    'text-center items-center mx-auto';
+
+  // Alignment classes for split mode
+  const splitAlignClasses =
+    textPlacement === 'left' ? 'text-left items-start' :
+    textPlacement === 'right' ? 'text-right items-end' :
+    'text-center items-center';
+
+  const bannerContent = hasBanner ? (
+    <div className="relative w-full overflow-hidden rounded-2xl md:rounded-[2.5rem] shadow-2xl flex select-none">
+      {isSplit ? (
+        <div
+          className="flex flex-col-reverse lg:flex-row w-full bg-black text-white"
+          style={{ minHeight: '350px', height: bannerHeight }}
+        >
+          {/* Text Side */}
+          <div className={`w-full lg:w-1/2 p-8 sm:p-12 flex flex-col justify-center space-y-4 ${splitAlignClasses}`}>
+            <span className="text-[10px] font-black tracking-[0.3em] uppercase text-gray-400">Donate</span>
+            <h1
+              className="text-3xl sm:text-4xl md:text-5xl font-black italic tracking-tighter uppercase leading-none"
+              style={{ color: content.donateTitleColor || '#FFFFFF', fontFamily: `${content.donateTitleFontFamily || 'Inter'}, sans-serif`, fontWeight: content.donateTitleWeight || '900' }}
+            >
+              {content.donateTitle || 'FUEL THE FIGHT'}
+            </h1>
+            <div className="w-12 h-1 bg-blue-500 rounded-full" />
+            <p
+              className="text-xs sm:text-sm font-medium leading-relaxed"
+              style={{ color: content.donateSubtitleColor || '#E5E7EB', fontFamily: `${content.donateSubtitleFontFamily || 'Inter'}, sans-serif` }}
+            >
+              {content.donateSubtitle || 'Your contribution directly funds prosthetics, covers care-related costs, and empowers cancer survivors to reclaim their lives.'}
+            </p>
+          </div>
+          {/* Image Side */}
+          <div
+            className="w-full lg:w-1/2 min-h-[220px] lg:min-h-full"
+            style={{
+              backgroundImage: `url(${bannerImg})`,
+              backgroundSize:
+                content.donateBannerSize === 'fit' || content.donateBannerSize === 'centered' || content.donateBannerSize === 'contain' ? 'contain' :
+                content.donateBannerSize === 'stretch' ? '100% 100%' : 'cover',
+              backgroundPosition: content.donateBannerPosition || 'center',
+              backgroundRepeat: 'no-repeat',
+            }}
+          />
+        </div>
+      ) : (
+        /* Full Overlay Layout */
+        <div
+          className="relative w-full flex flex-col justify-center"
+          style={{
+            height: bannerHeight,
+            maxHeight: '60vh',
+            minHeight: '220px',
+            backgroundImage: `url(${bannerImg})`,
+            backgroundSize:
+              content.donateBannerSize === 'fit' || content.donateBannerSize === 'centered' || content.donateBannerSize === 'contain' ? 'contain' :
+              content.donateBannerSize === 'stretch' ? '100% 100%' : 'cover',
+            backgroundPosition: content.donateBannerPosition || 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <div
+            className="absolute inset-0 bg-black transition-opacity duration-300"
+            style={{ opacity: parseFloat(content.donateBannerOverlay || '0.4') }}
+          />
+          <div className={`relative z-10 px-8 py-12 flex flex-col space-y-4 w-full ${overlayAlignClasses}`}>
+            <span className="text-[10px] font-black tracking-[0.3em] uppercase" style={{ color: content.donateSubtitleColor || '#E5E7EB' }}>Donate</span>
+            <h1
+              className="text-4xl sm:text-5xl md:text-6xl font-black italic tracking-tighter uppercase leading-none"
+              style={{ color: content.donateTitleColor || '#FFFFFF', fontFamily: `${content.donateTitleFontFamily || 'Inter'}, sans-serif`, fontWeight: content.donateTitleWeight || '900' }}
+            >
+              {content.donateTitle || 'FUEL THE FIGHT'}
+            </h1>
+            <div className="w-12 h-1 bg-blue-500 rounded-full" />
+            <p
+              className="text-sm font-medium leading-relaxed max-w-2xl"
+              style={{ color: content.donateSubtitleColor || '#E5E7EB', fontFamily: `${content.donateSubtitleFontFamily || 'Inter'}, sans-serif` }}
+            >
+              {content.donateSubtitle || 'Your contribution directly funds prosthetics, covers care-related costs, and empowers cancer survivors to reclaim their lives.'}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  ) : (
+    <div className="text-center max-w-2xl mx-auto space-y-4">
+      <span className="text-[10px] font-black tracking-[0.3em] uppercase text-blue-600">Donate</span>
+      <h1 className="text-5xl md:text-6xl font-black italic tracking-tighter uppercase leading-none"
+        style={{ color: content.donateTitleColor || '#000000', fontFamily: `${content.donateTitleFontFamily || 'Inter'}, sans-serif` }}
       >
         {content.donateTitle || 'FUEL THE FIGHT'}
       </h1>
-      <p 
-        className="max-w-2xl mx-auto font-medium responsive-donate-subtitle"
-        style={{
-          color: content.donateSubtitleColor || (hasBanner ? '#E5E7EB' : '#4B5563'),
-          fontFamily: `${content.donateSubtitleFontFamily || 'Inter'}, sans-serif`,
-          textAlign: (content.donateSubtitleAlign || 'center') as any,
-          fontWeight: content.donateSubtitleWeight || '500',
-        }}
+      <div className="w-12 h-1 bg-blue-600 mx-auto rounded-full" />
+      <p className="text-gray-500 text-sm font-medium leading-relaxed"
+        style={{ color: content.donateSubtitleColor || '#4B5563', fontFamily: `${content.donateSubtitleFontFamily || 'Inter'}, sans-serif` }}
       >
         {content.donateSubtitle || 'Your contribution directly funds prosthetics, covers care-related costs, and empowers cancer survivors to reclaim their lives.'}
       </p>
+    </div>
+  );
+
+  const finalBanner = hasBanner && content.donateBannerLink ? (
+    <a href={content.donateBannerLink} target="_blank" rel="noopener noreferrer" className="block hover:opacity-95 transition-opacity mb-8 md:mb-12">
+      {bannerContent}
+    </a>
+  ) : (
+    <div className="mb-8 md:mb-12">
+      {bannerContent}
     </div>
   );
 
@@ -229,31 +313,8 @@ export default function DonatePage() {
         }
       ` }} />
       <div className="max-w-7xl mx-auto">
-        {hasBanner ? (
-          <div 
-            className="relative w-full overflow-hidden rounded-2xl md:rounded-[2.5rem] mb-8 md:mb-12 shadow-2xl flex flex-col justify-center select-none"
-            style={{
-              height: `${content.donateBannerHeight || '350'}px`,
-              maxHeight: '60vh',
-              minHeight: '200px',
-              backgroundImage: `url(${bannerImg})`,
-              backgroundSize: content.donateBannerSize === 'centered' ? 'contain' : content.donateBannerSize === 'stretch' ? '100% 100%' : 'cover',
-              backgroundPosition: content.donateBannerPosition || 'center',
-            }}
-          >
-            <div 
-              className="absolute inset-0 bg-black transition-opacity duration-300" 
-              style={{ opacity: parseFloat(content.donateBannerOverlay || '0.4') }} 
-            />
-            <div className="relative z-10 px-8 py-12">
-              {headerContent}
-            </div>
-          </div>
-        ) : (
-          <header className="mb-12 md:mb-16">
-            {headerContent}
-          </header>
-        )}
+        {/* Header Banner */}
+        {finalBanner}
 
         {/* Make a Difference Today Section */}
         <div className="my-16 max-w-4xl mx-auto text-center px-4">

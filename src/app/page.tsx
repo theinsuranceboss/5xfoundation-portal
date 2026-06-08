@@ -375,6 +375,10 @@ export default function Home() {
     heroDescAlign: "left",
     heroTitleBold: true,
     heroDescBold: false,
+    heroPlacement: "left",
+    heroButtonScale: "1.0",
+    heroHeight: "100vh",
+    heroLayout: "split",
     missionTitleColor: "#000000",
     missionDescColor: "#000000",
     missionTitleSize: "40",
@@ -494,6 +498,23 @@ export default function Home() {
     let ignore = false;
 
     async function resolveHeroImages() {
+      const slideshowSource = (content as any).hero_slideshow_source || 'gdrive';
+
+      if (slideshowSource === 'uploaded') {
+        const uploadedStr = (content as any).hero_uploaded_images || '';
+        const uploadedLinks = uploadedStr
+          .split('\n')
+          .map((l: string) => l.trim())
+          .filter((l: string) => l.length > 0);
+        
+        if (uploadedLinks.length > 0) {
+          if (ignore) return;
+          console.log("[resolveHeroImages] Resolved uploaded images:", uploadedLinks);
+          setHeroImages(uploadedLinks);
+          return;
+        }
+      }
+
       const source = content.hero_gdrive_link || "";
       console.log("[resolveHeroImages] Resolving slideshow from source:", source);
       
@@ -566,7 +587,7 @@ export default function Home() {
     return () => {
       ignore = true;
     };
-  }, [content.hero_gdrive_link, content.hero_1, content.hero_2, content.hero_3, v]);
+  }, [(content as any).hero_slideshow_source, (content as any).hero_uploaded_images, content.hero_gdrive_link, content.hero_1, content.hero_2, content.hero_3, v]);
 
   useEffect(() => {
     if (heroImages.length === 0) return;
@@ -580,17 +601,20 @@ export default function Home() {
     <div className="flex flex-col bg-white">
       {/* Dynamic Section Styles — !important override for all Tailwind color/font classes with fully responsive font size scaling */}
       {(() => {
-        const s = (sizeStr: string | number, mobileFactor: number, minMobile: number, tabletFactor: number, minTablet: number) => {
+        const s = (sizeStr: string | number, mobileFactor: number, minMobile: number, tabletFactor: number, minTablet: number, phoneFactor?: number, minPhone?: number) => {
           const size = parseInt(String(sizeStr)) || 16;
+          const pFactor = phoneFactor !== undefined ? phoneFactor : mobileFactor * 0.85;
+          const pMin = minPhone !== undefined ? minPhone : Math.max(12, Math.round(minMobile * 0.85));
           return {
             desktop: size,
             tablet: Math.max(minTablet, Math.round(size * tabletFactor)),
-            mobile: Math.max(minMobile, Math.round(size * mobileFactor))
+            mobile: Math.max(minMobile, Math.round(size * mobileFactor)),
+            phone: Math.max(pMin, Math.round(size * pFactor))
           };
         };
 
-        const heroTitleSizes = s(content.heroTitleSize || '120', 0.45, 36, 0.7, 56);
-        const heroDescSizes = s(content.heroDescSize || '20', 0.8, 16, 0.9, 18);
+        const heroTitleSizes = s(content.heroTitleSize || '120', 0.45, 36, 0.65, 48, 0.32, 28);
+        const heroDescSizes = s(content.heroDescSize || '20', 0.8, 15, 0.9, 16, 0.7, 14);
         const missionTitleSizes = s(content.missionTitleSize || '40', 0.65, 28, 0.8, 32);
         const missionDescSizes = s(content.missionDescSize || '24', 0.75, 18, 0.9, 20);
         const philosophyTitleSizes = s(content.philosophyTitleSize || '48', 0.65, 28, 0.8, 36);
@@ -606,8 +630,12 @@ export default function Home() {
         return (
           <style dangerouslySetInnerHTML={{ __html: `
             /* Desktop Styles */
-            .s-hero-title  { color: ${content.heroTitleColor || '#FFFFFF'} !important; font-size: ${heroTitleSizes.desktop}px !important; text-align: ${content.heroTitleAlign || 'left'} !important; font-weight: ${content.heroTitleBold !== false ? '900' : '400'} !important; }
-            .s-hero-desc   { color: ${content.heroDescColor || '#F3F4F6'} !important; font-size: ${heroDescSizes.desktop}px !important; text-align: ${content.heroDescAlign || 'left'} !important; font-weight: ${content.heroDescBold ? '700' : '500'} !important; }
+            .s-hero-title  { color: ${content.heroTitleColor || '#FFFFFF'} !important; font-size: ${heroTitleSizes.desktop}px !important; text-align: ${content.heroTitleAlign || (content as any).heroPlacement || 'left'} !important; font-weight: ${content.heroTitleBold !== false ? '900' : '400'} !important; }
+            .s-hero-desc   { color: ${content.heroDescColor || '#F3F4F6'} !important; font-size: ${heroDescSizes.desktop}px !important; text-align: ${content.heroDescAlign || (content as any).heroPlacement || 'left'} !important; font-weight: ${content.heroDescBold ? '700' : '500'} !important; }
+            .s-hero-buttons { justify-content: ${
+              (content as any).heroPlacement === 'center' ? 'center' : 
+              (content as any).heroPlacement === 'right' ? 'flex-end' : 'flex-start'
+            } !important; }
             .s-mission-title { color: ${content.missionTitleColor || '#000000'} !important; font-size: ${missionTitleSizes.desktop}px !important; text-align: ${content.missionTitleAlign || 'center'} !important; font-weight: ${content.missionTitleBold !== false ? '900' : '400'} !important; }
             .s-mission-desc  { color: ${content.missionDescColor || '#000000'} !important; font-size: ${missionDescSizes.desktop}px !important; text-align: ${content.missionDescAlign || 'center'} !important; font-weight: ${content.missionDescBold ? '700' : '500'} !important; }
             .s-philosophy-title { color: ${content.philosophyTitleColor || '#FFFFFF'} !important; font-size: ${philosophyTitleSizes.desktop}px !important; text-align: ${content.philosophyTitleAlign || 'center'} !important; font-weight: ${content.philosophyTitleBold !== false ? '900' : '400'} !important; }
@@ -641,6 +669,7 @@ export default function Home() {
             @media (max-width: 767px) {
               .s-hero-title { font-size: ${heroTitleSizes.mobile}px !important; text-align: center !important; }
               .s-hero-desc { font-size: ${heroDescSizes.mobile}px !important; text-align: center !important; }
+              .s-hero-buttons { justify-content: center !important; }
               .s-mission-title { font-size: ${missionTitleSizes.mobile}px !important; }
               .s-mission-desc { font-size: ${missionDescSizes.mobile}px !important; }
               .s-philosophy-title { font-size: ${philosophyTitleSizes.mobile}px !important; }
@@ -653,64 +682,253 @@ export default function Home() {
               .s-donation-title { font-size: ${donationTitleSizes.mobile}px !important; }
               .s-donation-desc { font-size: ${donationDescSizes.mobile}px !important; }
             }
+
+            /* Phone Override */
+            @media (max-width: 480px) {
+              .s-hero-title { font-size: ${heroTitleSizes.phone}px !important; text-align: center !important; }
+              .s-hero-desc { font-size: ${heroDescSizes.phone}px !important; text-align: center !important; }
+              .s-hero-buttons { justify-content: center !important; }
+            }
           ` }} />
         );
       })()}
       {/* Hero Section - Carousel Edition */}
-      <section className="relative h-screen flex items-center text-left px-6 md:px-24 overflow-hidden">
-        {/* Animated Background Carousel */}
-        <div className="absolute inset-0 bg-black">
-          <AnimatePresence mode="wait">
-            <motion.img 
-              key={currentHero}
-              src={heroImages[currentHero]} 
-              initial={{ opacity: 0, scale: 1.1 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 2, ease: "circOut" }}
-              className="w-full h-full object-cover" 
-              alt="Foundation Hero" 
-            />
-          </AnimatePresence>
-          {/* Subtle gradient just for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/20 to-transparent z-10" />
-        </div>
-
-
-        <div className="max-w-7xl relative z-10">
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1, ease: "easeOut" }}
-          >
-            <h2 className="text-[10px] md:text-sm uppercase tracking-[0.6em] text-white font-black mb-8 opacity-80">
-              Empowering Cancer Warriors
-            </h2>
-            <h1 className="s-hero-title tracking-[-0.04em] leading-[0.85] mb-8 md:mb-12 uppercase italic whitespace-pre-line">
-              {content.heroTitle}
-            </h1>
-            <p className="s-hero-desc mb-10 md:mb-16 max-w-2xl leading-relaxed">
-              {content.heroDesc}
-            </p>
-            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-6">
-              <Link
-                href="/donate"
-                className="bg-brand-blue text-white font-black text-xl uppercase tracking-[0.2em] px-12 py-8 hover:bg-white hover:text-black transition-all flex items-center justify-center gap-4 group"
+      {/* Hero Section - Switchable Layout */}
+      {((content as any).heroLayout || 'split') === 'split' ? (
+        <section 
+          className="relative flex flex-col-reverse lg:flex-row w-full overflow-hidden bg-[#000000]"
+          style={{
+            minHeight: (content as any).heroHeight || '100vh',
+          }}
+        >
+          {/* Left/Bottom Column: Text & Buttons */}
+          {(() => {
+            const btnScale = parseFloat((content as any).heroButtonScale || '1.0');
+            const isCenter = (content as any).heroPlacement === 'center';
+            const isRight = (content as any).heroPlacement === 'right';
+            const alignClass = isCenter ? 'items-center text-center' : isRight ? 'items-end text-right' : 'items-start text-left';
+            
+            return (
+              <div 
+                className={`w-full lg:w-1/2 flex flex-col justify-center px-6 md:px-12 lg:px-24 py-16 md:py-20 lg:py-24 bg-[#000000] relative z-10`}
+                style={{
+                  textAlign: 
+                    (content as any).heroPlacement === 'center' ? 'center' :
+                    (content as any).heroPlacement === 'right' ? 'right' : 'left'
+                }}
               >
-                <span>Donate Now</span>
-                <div className="w-3 h-3 bg-white group-hover:bg-brand-blue transition-colors" />
-              </Link>
-              <Link
-                href="/merch"
-                className="bg-white/10 backdrop-blur-md border-2 border-white/20 text-white font-black text-xl uppercase tracking-[0.2em] px-12 py-8 hover:bg-brand-blue hover:border-brand-blue transition-all flex items-center justify-center gap-4 group"
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className={`flex flex-col ${alignClass} w-full max-w-xl mx-auto`}
+                >
+                  <h2 className="text-[10px] md:text-sm uppercase tracking-[0.6em] text-white font-black mb-6 md:mb-8 opacity-80">
+                    Empowering Cancer Warriors
+                  </h2>
+                  <h1 className="s-hero-title tracking-[-0.04em] leading-[0.9] mb-6 md:mb-8 uppercase italic whitespace-pre-line">
+                    {content.heroTitle}
+                  </h1>
+                  <p className={`s-hero-desc mb-8 md:mb-12 leading-relaxed opacity-90 ${isCenter ? 'mx-auto' : ''}`}>
+                    {content.heroDesc}
+                  </p>
+                  <div 
+                    className="s-hero-buttons flex flex-col sm:flex-row items-stretch sm:items-center gap-6 w-full"
+                  >
+                    <Link
+                      href="/donate"
+                      className="bg-brand-blue text-white font-black uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all flex items-center justify-center gap-4 group shrink-0"
+                      style={{
+                        fontSize: `${Math.round(20 * btnScale)}px`,
+                        paddingTop: `${Math.round(24 * btnScale)}px`,
+                        paddingBottom: `${Math.round(24 * btnScale)}px`,
+                        paddingLeft: `${Math.round(36 * btnScale)}px`,
+                        paddingRight: `${Math.round(36 * btnScale)}px`,
+                      }}
+                    >
+                      <span>Donate Now</span>
+                      <div 
+                        className="bg-white group-hover:bg-brand-blue transition-colors" 
+                        style={{ 
+                          width: `${Math.round(12 * btnScale)}px`, 
+                          height: `${Math.round(12 * btnScale)}px` 
+                        }}
+                      />
+                    </Link>
+                    <Link
+                      href="/merch"
+                      className="bg-white/10 backdrop-blur-md border-2 border-white/20 text-white font-black uppercase tracking-[0.2em] hover:bg-brand-blue hover:border-brand-blue transition-all flex items-center justify-center gap-4 group shrink-0"
+                      style={{
+                        fontSize: `${Math.round(20 * btnScale)}px`,
+                        paddingTop: `${Math.round(24 * btnScale)}px`,
+                        paddingBottom: `${Math.round(24 * btnScale)}px`,
+                        paddingLeft: `${Math.round(36 * btnScale)}px`,
+                        paddingRight: `${Math.round(36 * btnScale)}px`,
+                      }}
+                    >
+                      <span>Shop Merch</span>
+                      <div 
+                        className="bg-brand-blue group-hover:bg-white transition-colors" 
+                        style={{ 
+                          width: `${Math.round(12 * btnScale)}px`, 
+                          height: `${Math.round(12 * btnScale)}px` 
+                        }}
+                      />
+                    </Link>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })()}
+
+          {/* Right/Top Column: Animated Background Carousel */}
+          <div className="w-full lg:w-1/2 h-[40vh] sm:h-[45vh] md:h-[50vh] lg:h-auto relative overflow-hidden bg-black flex-1 self-stretch">
+            <AnimatePresence mode="wait">
+              <motion.div 
+                key={currentHero}
+                style={{
+                  backgroundImage: `url(${heroImages[currentHero]})`,
+                  backgroundSize: 
+                    (content as any).hero_fit === 'fit' ? 'contain' :
+                    (content as any).hero_fit === 'stretch' ? '100% 100%' :
+                    (content as any).hero_fit === 'tile' || (content as any).hero_fit === 'title' ? 'auto' : 'cover',
+                  backgroundRepeat: 
+                    (content as any).hero_fit === 'tile' || (content as any).hero_fit === 'title' ? 'repeat' : 'no-repeat',
+                  backgroundPosition: 
+                    (content as any).hero_fit === 'tile' || (content as any).hero_fit === 'title' ? 'top left' : 'center',
+                }}
+                initial={{ opacity: 0, scale: 1.05 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.5, ease: "easeInOut" }}
+                className="w-full h-full absolute inset-0"
+                aria-label="Foundation Hero Background"
+              />
+            </AnimatePresence>
+            {/* Subtle overlay on the images */}
+            <div className="absolute inset-0 bg-black/10 z-10" />
+          </div>
+        </section>
+      ) : (
+        <section 
+          className="relative flex items-center px-6 md:px-12 lg:px-24 overflow-hidden bg-black"
+          style={{
+            height: (content as any).heroHeight || '100vh',
+            justifyContent: 
+              (content as any).heroPlacement === 'center' ? 'center' :
+              (content as any).heroPlacement === 'right' ? 'flex-end' : 'flex-start',
+            textAlign: 
+              (content as any).heroPlacement === 'center' ? 'center' :
+              (content as any).heroPlacement === 'right' ? 'right' : 'left'
+          }}
+        >
+          {/* Animated Background Carousel (Full Overlay Mode) */}
+          <div className="absolute inset-0 bg-black">
+            <AnimatePresence mode="wait">
+              <motion.div 
+                key={currentHero}
+                style={{
+                  backgroundImage: `url(${heroImages[currentHero]})`,
+                  backgroundSize: 
+                    (content as any).hero_fit === 'fit' ? 'contain' :
+                    (content as any).hero_fit === 'stretch' ? '100% 100%' :
+                    (content as any).hero_fit === 'tile' || (content as any).hero_fit === 'title' ? 'auto' : 'cover',
+                  backgroundRepeat: 
+                    (content as any).hero_fit === 'tile' || (content as any).hero_fit === 'title' ? 'repeat' : 'no-repeat',
+                  backgroundPosition: 
+                    (content as any).hero_fit === 'tile' || (content as any).hero_fit === 'title' ? 'top left' : 'center',
+                }}
+                initial={{ opacity: 0, scale: 1.1 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 2, ease: "circOut" }}
+                className="w-full h-full absolute inset-0"
+                aria-label="Foundation Hero Background"
+              />
+            </AnimatePresence>
+            {/* Dark gradient for text readability in overlay mode */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-black/85 lg:bg-gradient-to-r lg:from-black/85 lg:via-black/40 lg:to-black/20 z-10" />
+          </div>
+
+          {(() => {
+            const btnScale = parseFloat((content as any).heroButtonScale || '1.0');
+            const isCenter = (content as any).heroPlacement === 'center';
+            const isRight = (content as any).heroPlacement === 'right';
+            const alignClass = isCenter ? 'items-center' : isRight ? 'items-end' : 'items-start';
+            
+            return (
+              <div 
+                className="max-w-7xl relative z-20 w-full"
+                style={{
+                  marginLeft: (content as any).heroPlacement === 'left' ? '0' : 'auto',
+                  marginRight: (content as any).heroPlacement === 'right' ? '0' : 'auto',
+                }}
               >
-                <span>Shop Merch</span>
-                <div className="w-3 h-3 bg-brand-blue group-hover:bg-white transition-colors" />
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </section>
+                <motion.div
+                  initial={{ opacity: 0, x: isCenter ? 0 : isRight ? 50 : -50, y: isCenter ? 30 : 0 }}
+                  animate={{ opacity: 1, x: 0, y: 0 }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className={`flex flex-col ${alignClass}`}
+                >
+                  <h2 className="text-[10px] md:text-sm uppercase tracking-[0.6em] text-white font-black mb-8 opacity-80">
+                    Empowering Cancer Warriors
+                  </h2>
+                  <h1 className="s-hero-title tracking-[-0.04em] leading-[0.85] mb-8 md:mb-12 uppercase italic whitespace-pre-line">
+                    {content.heroTitle}
+                  </h1>
+                  <p className={`s-hero-desc mb-10 md:mb-16 max-w-2xl leading-relaxed ${isCenter ? 'mx-auto' : ''}`}>
+                    {content.heroDesc}
+                  </p>
+                  <div 
+                    className="s-hero-buttons flex flex-col sm:flex-row items-stretch sm:items-center gap-6 w-full"
+                  >
+                    <Link
+                      href="/donate"
+                      className="bg-brand-blue text-white font-black uppercase tracking-[0.2em] hover:bg-white hover:text-black transition-all flex items-center justify-center gap-4 group shrink-0"
+                      style={{
+                        fontSize: `${Math.round(20 * btnScale)}px`,
+                        paddingTop: `${Math.round(24 * btnScale)}px`,
+                        paddingBottom: `${Math.round(24 * btnScale)}px`,
+                        paddingLeft: `${Math.round(36 * btnScale)}px`,
+                        paddingRight: `${Math.round(36 * btnScale)}px`,
+                      }}
+                    >
+                      <span>Donate Now</span>
+                      <div 
+                        className="bg-white group-hover:bg-brand-blue transition-colors" 
+                        style={{ 
+                          width: `${Math.round(12 * btnScale)}px`, 
+                          height: `${Math.round(12 * btnScale)}px` 
+                        }}
+                      />
+                    </Link>
+                    <Link
+                      href="/merch"
+                      className="bg-white/10 backdrop-blur-md border-2 border-white/20 text-white font-black uppercase tracking-[0.2em] hover:bg-brand-blue hover:border-brand-blue transition-all flex items-center justify-center gap-4 group shrink-0"
+                      style={{
+                        fontSize: `${Math.round(20 * btnScale)}px`,
+                        paddingTop: `${Math.round(24 * btnScale)}px`,
+                        paddingBottom: `${Math.round(24 * btnScale)}px`,
+                        paddingLeft: `${Math.round(36 * btnScale)}px`,
+                        paddingRight: `${Math.round(36 * btnScale)}px`,
+                      }}
+                    >
+                      <span>Shop Merch</span>
+                      <div 
+                        className="bg-brand-blue group-hover:bg-white transition-colors" 
+                        style={{ 
+                          width: `${Math.round(12 * btnScale)}px`, 
+                          height: `${Math.round(12 * btnScale)}px` 
+                        }}
+                      />
+                    </Link>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })()}
+        </section>
+      )}
 
       <AdBanner
         type={content.adTopType || "media"}

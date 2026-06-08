@@ -61,4 +61,7 @@ products_export.csv
 # Prisma generated client
 /src/generated/
 
-
+# scratch directory
+/scratch/
+.git_new/
+.next-prod/

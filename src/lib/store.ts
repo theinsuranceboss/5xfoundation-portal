@@ -89,10 +89,10 @@ interface StoreState {
 // Generate or retrieve a session ID
 function getSessionId(): string {
   if (typeof window === 'undefined') return 'server';
-  let sid = localStorage.getItem('cart-session-id');
+  let sid = sessionStorage.getItem('cart-session-id');
   if (!sid) {
     sid = 'session-' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-    localStorage.setItem('cart-session-id', sid);
+    sessionStorage.setItem('cart-session-id', sid);
   }
   return sid;
 }

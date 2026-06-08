@@ -15,6 +15,34 @@ export function PayPalDonateButton({ amount = "50" }: { amount?: string }) {
   const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "AVrTrX38Se2i3orog_E2JzqkaqouA68T2MkcshUPBLJe_F-woWnUMvwRGJEFWjnylukTSUus1hIFNK2a";
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (window.paypal) {
+        setIsSdkLoaded(true);
+        return;
+      }
+
+      // Check if script is already in document
+      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (script) {
+        const handleLoad = () => setIsSdkLoaded(true);
+        script.addEventListener("load", handleLoad);
+
+        const interval = setInterval(() => {
+          if (window.paypal) {
+            setIsSdkLoaded(true);
+            clearInterval(interval);
+          }
+        }, 100);
+
+        return () => {
+          script.removeEventListener("load", handleLoad);
+          clearInterval(interval);
+        };
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     // If the SDK is loaded and the container exists, render the buttons
     if (isSdkLoaded && window.paypal) {
       const container = document.getElementById("paypal-button-container");
@@ -51,7 +79,7 @@ export function PayPalDonateButton({ amount = "50" }: { amount?: string }) {
     <div className="w-full max-w-md mx-auto space-y-4">
       <Script 
         src={`https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&components=buttons`}
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         onLoad={() => setIsSdkLoaded(true)}
       />
 

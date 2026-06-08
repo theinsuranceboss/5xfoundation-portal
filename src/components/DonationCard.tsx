@@ -17,6 +17,34 @@ export function DonationCard() {
   const [isSdkLoaded, setIsSdkLoaded] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (window.paypal) {
+        setIsSdkLoaded(true);
+        return;
+      }
+
+      // Check if script is already in document
+      const script = document.querySelector('script[src*="paypal.com/sdk/js"]');
+      if (script) {
+        const handleLoad = () => setIsSdkLoaded(true);
+        script.addEventListener("load", handleLoad);
+
+        const interval = setInterval(() => {
+          if (window.paypal) {
+            setIsSdkLoaded(true);
+            clearInterval(interval);
+          }
+        }, 100);
+
+        return () => {
+          script.removeEventListener("load", handleLoad);
+          clearInterval(interval);
+        };
+      }
+    }
+  }, []);
+
   const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "AVrTrX38Se2i3orog_E2JzqkaqouA68T2MkcshUPBLJe_F-woWnUMvwRGJEFWjnylukTSUus1hIFNK2a";
   const stripeLink = "https://buy.stripe.com/00wcN5gCLf9c4iUcLD4ow00";
 
@@ -82,7 +110,7 @@ export function DonationCard() {
       
       <Script 
         src={`https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&components=buttons&disable-funding=card,credit,venmo,paylater`}
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         onLoad={() => setIsSdkLoaded(true)}
       />
 

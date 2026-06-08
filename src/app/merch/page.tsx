@@ -85,55 +85,129 @@ export default function MerchPage() {
   const bannerImg = content.shopBanner || '/shop_banner.png';
   const hasBanner = bannerImg.trim() !== '' && bannerImg !== 'none';
 
+  const isSplit = content.shopBannerLayout === 'split';
+  const textPlacement = content.shopBannerPlacement || 'center'; // left | center | right
+
+  // Alignment classes for overlay mode
+  const overlayAlignClasses = 
+    textPlacement === 'left' ? 'text-left items-start' :
+    textPlacement === 'right' ? 'text-right items-end ml-auto' :
+    'text-center items-center mx-auto';
+
+  // Alignment classes for split mode (desktop)
+  const splitAlignClasses = 
+    textPlacement === 'left' ? 'text-left items-start' :
+    textPlacement === 'right' ? 'text-right items-end' :
+    'text-center items-center';
+
+  const bannerHeight = `${content.shopBannerHeight || '350'}px`;
+
+  const bannerContent = hasBanner ? (
+    <div className="relative w-full overflow-hidden rounded-2xl md:rounded-[2.5rem] shadow-2xl flex select-none">
+      {isSplit ? (
+        <div 
+          className="flex flex-col-reverse lg:flex-row w-full bg-black text-white"
+          style={{ minHeight: '350px', height: bannerHeight }}
+        >
+          {/* Text Side */}
+          <div 
+            className={`w-full lg:w-1/2 p-8 sm:p-12 flex flex-col justify-center space-y-4 ${splitAlignClasses}`}
+          >
+            <span className="text-[10px] font-black tracking-[0.3em] uppercase text-gray-400">Official Shop</span>
+            <h1 
+              className="text-3xl sm:text-4xl md:text-5xl font-black italic tracking-tighter uppercase leading-none"
+              style={{ color: content.shopTitleColor || '#FFFFFF' }}
+            >
+              {content.shopTitle || '5XFOUNDATION MERCH'}
+            </h1>
+            <div className="w-12 h-1 bg-blue-500 rounded-full" />
+            <p 
+              className="text-xs sm:text-sm font-medium leading-relaxed"
+              style={{ color: content.shopSubtitleColor || '#E5E7EB' }}
+            >
+              {content.shopSubtitle || 'Wear your support. 100% of proceeds fund prosthetics and care-related costs for cancer survivors.'}
+            </p>
+          </div>
+          {/* Image Side */}
+          <div 
+            className="w-full lg:w-1/2 min-h-[220px] lg:min-h-full"
+            style={{
+              backgroundImage: `url(${bannerImg})`,
+              backgroundSize: 
+                content.shopBannerSize === 'fit' || content.shopBannerSize === 'centered' || content.shopBannerSize === 'contain' ? 'contain' : 
+                content.shopBannerSize === 'stretch' ? '100% 100%' : 
+                content.shopBannerSize === 'tile' || content.shopBannerSize === 'repeat' ? 'auto' : 'cover',
+              backgroundRepeat: 
+                content.shopBannerSize === 'tile' || content.shopBannerSize === 'repeat' ? 'repeat' : 'no-repeat',
+              backgroundPosition: content.shopBannerPosition || 'center',
+            }}
+          />
+        </div>
+      ) : (
+        /* Full Overlay Layout */
+        <div 
+          className="relative w-full flex flex-col justify-center"
+          style={{
+            height: bannerHeight,
+            maxHeight: '60vh',
+            minHeight: '220px',
+            backgroundImage: `url(${bannerImg})`,
+            backgroundSize: 
+              content.shopBannerSize === 'fit' || content.shopBannerSize === 'centered' || content.shopBannerSize === 'contain' ? 'contain' : 
+              content.shopBannerSize === 'stretch' ? '100% 100%' : 
+              content.shopBannerSize === 'tile' || content.shopBannerSize === 'repeat' ? 'auto' : 'cover',
+            backgroundRepeat: 
+              content.shopBannerSize === 'tile' || content.shopBannerSize === 'repeat' ? 'repeat' : 'no-repeat',
+            backgroundPosition: content.shopBannerPosition || 'center',
+          }}
+        >
+          <div 
+            className="absolute inset-0 bg-black transition-opacity duration-300" 
+            style={{ opacity: parseFloat(content.shopBannerOverlay || '0.4') }} 
+          />
+          <div className={`relative z-10 px-8 py-12 flex flex-col space-y-4 w-full ${overlayAlignClasses}`}>
+            <span className="text-[10px] font-black tracking-[0.3em] uppercase" style={{ color: content.shopSubtitleColor || '#E5E7EB' }}>Official Shop</span>
+            <h1 
+              className="text-4xl sm:text-5xl md:text-6xl font-black italic tracking-tighter uppercase leading-none"
+              style={{ color: content.shopTitleColor || '#FFFFFF' }}
+            >
+              {content.shopTitle || '5XFOUNDATION MERCH'}
+            </h1>
+            <div className="w-12 h-1 bg-blue-500 rounded-full" />
+            <p 
+              className="text-sm font-medium leading-relaxed max-w-2xl"
+              style={{ color: content.shopSubtitleColor || '#E5E7EB' }}
+            >
+              {content.shopSubtitle || 'Wear your support. 100% of proceeds fund prosthetics and care-related costs for cancer survivors.'}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  ) : (
+    <div className="text-center max-w-2xl mx-auto space-y-4">
+      <span className="text-[10px] font-black tracking-[0.3em] uppercase text-blue-600">Official Shop</span>
+      <h1 className="text-5xl md:text-6xl font-black italic tracking-tighter uppercase leading-none">
+        {content.shopTitle || '5XFOUNDATION MERCH'}
+      </h1>
+      <div className="w-12 h-1 bg-blue-600 mx-auto rounded-full" />
+      <p className="text-gray-500 text-sm font-medium leading-relaxed">
+        {content.shopSubtitle || 'Wear your support. 100% of proceeds directly fund access to high-end prosthetics, care-related costs, and empower cancer warriors.'}
+      </p>
+    </div>
+  );
+
+  const finalBanner = hasBanner && content.shopBannerLink ? (
+    <a href={content.shopBannerLink} target="_blank" rel="noopener noreferrer" className="block hover:opacity-95 transition-opacity">
+      {bannerContent}
+    </a>
+  ) : bannerContent;
+
   return (
     <div className="py-24 md:py-32 px-6 sm:px-12 bg-white text-black min-h-screen">
       <div className="max-w-7xl mx-auto space-y-12">
         {/* Store Header Banner */}
-        {hasBanner ? (
-          <div 
-            className="relative w-full overflow-hidden rounded-2xl md:rounded-[2.5rem] shadow-2xl flex flex-col justify-center select-none"
-            style={{
-              height: `${content.shopBannerHeight || '350'}px`,
-              maxHeight: '60vh',
-              minHeight: '220px',
-              backgroundImage: `url(${bannerImg})`,
-              backgroundSize: content.shopBannerSize === 'centered' ? 'contain' : content.shopBannerSize === 'stretch' ? '100% 100%' : 'cover',
-              backgroundPosition: content.shopBannerPosition || 'center',
-            }}
-          >
-            <div 
-              className="absolute inset-0 bg-black transition-opacity duration-300" 
-              style={{ opacity: parseFloat(content.shopBannerOverlay || '0.4') }} 
-            />
-            <div className="relative z-10 px-8 py-12 text-center max-w-3xl mx-auto space-y-4">
-              <span className="text-[10px] font-black tracking-[0.3em] uppercase" style={{ color: content.shopSubtitleColor || '#E5E7EB' }}>Official Shop</span>
-              <h1 
-                className="text-4xl sm:text-5xl md:text-6xl font-black italic tracking-tighter uppercase leading-none"
-                style={{ color: content.shopTitleColor || '#FFFFFF' }}
-              >
-                {content.shopTitle || '5XFOUNDATION MERCH'}
-              </h1>
-              <div className="w-12 h-1 bg-blue-500 mx-auto rounded-full" />
-              <p 
-                className="text-sm font-medium leading-relaxed max-w-2xl mx-auto"
-                style={{ color: content.shopSubtitleColor || '#E5E7EB' }}
-              >
-                {content.shopSubtitle || 'Wear your support. 100% of proceeds fund prosthetics and care-related costs for cancer survivors.'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center max-w-2xl mx-auto space-y-4">
-            <span className="text-[10px] font-black tracking-[0.3em] uppercase text-blue-600">Official Shop</span>
-            <h1 className="text-5xl md:text-6xl font-black italic tracking-tighter uppercase leading-none">
-              {content.shopTitle || '5XFOUNDATION MERCH'}
-            </h1>
-            <div className="w-12 h-1 bg-blue-600 mx-auto rounded-full" />
-            <p className="text-gray-500 text-sm font-medium leading-relaxed">
-              {content.shopSubtitle || 'Wear your support. 100% of proceeds directly fund access to high-end prosthetics, ease care-related costs, and empower cancer warriors.'}
-            </p>
-          </div>
-        )}
+        {finalBanner}
 
         {/* Dynamic Product Grid & Filters */}
         <ProductGrid />

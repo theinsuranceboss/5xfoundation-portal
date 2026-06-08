@@ -150,15 +150,15 @@ export async function GET() {
     });
 
     // 3. Compute Summary Statistics for Completed Orders
-    const completedOrders = orders.filter(o => o.status === 'completed');
+    const completedOrders = orders.filter((o: any) => o.status === 'completed');
     
     let totalRevenue = 0;
     let totalItemsSold = 0;
     const totalOrders = completedOrders.length;
 
-    completedOrders.forEach(o => {
+    completedOrders.forEach((o: any) => {
       totalRevenue += o.total;
-      o.items.forEach(item => {
+      o.items.forEach((item: any) => {
         totalItemsSold += item.quantity;
       });
     });
@@ -176,7 +176,7 @@ export async function GET() {
     // 4. Group Sales by Month (YYYY-MM)
     const monthlyMap = new Map<string, { month: string, revenue: number, orders: number }>();
     
-    completedOrders.forEach(o => {
+    completedOrders.forEach((o: any) => {
       const date = new Date(o.createdAt);
       const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
@@ -199,7 +199,7 @@ export async function GET() {
     // Format: { "YYYY-MM": [ { "day": 1, "revenue": 100, "orders": 2 } ] }
     const dailySales: Record<string, { day: number, revenue: number, orders: number }[]> = {};
 
-    completedOrders.forEach(o => {
+    completedOrders.forEach((o: any) => {
       const date = new Date(o.createdAt);
       const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const day = date.getDate();
@@ -208,7 +208,7 @@ export async function GET() {
         dailySales[monthStr] = [];
       }
 
-      let dayData = dailySales[monthStr].find(d => d.day === day);
+      let dayData = dailySales[monthStr].find((d: any) => d.day === day);
       if (!dayData) {
         dayData = { day, revenue: 0, orders: 0 };
         dailySales[monthStr].push(dayData);
@@ -236,12 +236,12 @@ export async function GET() {
       revenue: number 
     }>();
 
-    completedOrders.forEach(o => {
-      o.items.forEach(item => {
+    completedOrders.forEach((o: any) => {
+      o.items.forEach((item: any) => {
         const prodId = item.productId;
         const prodTitle = item.product?.title || 'Unknown Product';
         const prodPrice = item.price;
-        const frontImg = item.product?.images?.find(img => img.type === 'front')?.url || item.product?.images?.[0]?.url || '';
+        const frontImg = item.product?.images?.find((img: any) => img.type === 'front')?.url || item.product?.images?.[0]?.url || '';
 
         if (!bestSellersMap.has(prodId)) {
           bestSellersMap.set(prodId, {
@@ -268,15 +268,15 @@ export async function GET() {
       }));
 
     // 7. Format recent orders details (limit to latest 30 orders)
-    const formattedOrders = orders.slice(0, 30).map(o => ({
+    const formattedOrders = orders.slice(0, 30).map((o: any) => ({
       id: o.id,
       name: o.name || 'Anonymous Customer',
       email: o.email || 'N/A',
       total: o.total,
       status: o.status,
       createdAt: o.createdAt,
-      itemsCount: o.items.reduce((sum, i) => sum + i.quantity, 0),
-      itemsList: o.items.map(i => `${i.product?.title || 'Product'} (${i.color} / ${i.size}) x${i.quantity}`)
+      itemsCount: o.items.reduce((sum: number, i: any) => sum + i.quantity, 0),
+      itemsList: o.items.map((i: any) => `${i.product?.title || 'Product'} (${i.color} / ${i.size}) x${i.quantity}`)
     }));
 
     return NextResponse.json({
